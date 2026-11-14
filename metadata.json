@@ -1,0 +1,6 @@
+{
+  "name": "FORGE",
+  "description": "AI startup idea validator that delivers one honest, grounded reality-check report.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
