@@ -89,7 +89,7 @@ export async function analyzeIdea(
   }
 
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs ?? 90_000;
+  const timeoutMs = options.timeoutMs ?? 180_000;
   let didTimeout = false;
 
   const timer = window.setTimeout(() => {

@@ -9,7 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = "gemini-4-hydrogen";
+const MODEL_NAME = process.env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
+const MAX_IDEA_CHARS = 6000;
+const MAX_CLARIFICATION_CHARS = 2000;
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX) || 10;
 
 const ANALYSIS_SYSTEM_INSTRUCTION =
   "You are the analysis engine for FORGE, an AI idea validator. Ground the founder's idea in reality. Do not flatter and do not inflate scores. If the idea is weak, say so plainly and say why. Never state a market size, competitor revenue, or user count as fact unless it comes from a cited source or the founder. Any estimate must be labeled 'estimate' with its assumptions listed. Be direct, short sentences, no filler.";
@@ -25,6 +29,12 @@ interface ClarityCheckResult {
 }
 
 interface RawCompetitor {
+  name: string;
+  what_they_do: string;
+  source_index: number;
+}
+
+interface ReportCompetitor {
   name: string;
   what_they_do: string;
   source_url: string;
@@ -167,6 +177,30 @@ function clamp(num: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, num));
 }
 
+// Per-IP sliding window. In-memory, so it resets on restart and is per-instance.
+const requestLog = new Map<string, number[]>();
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const recent = (requestLog.get(ip) ?? []).filter(
+    (t) => now - t < RATE_LIMIT_WINDOW_MS
+  );
+  if (recent.length >= RATE_LIMIT_MAX_REQUESTS) {
+    requestLog.set(ip, recent);
+    return true;
+  }
+  recent.push(now);
+  requestLog.set(ip, recent);
+  if (requestLog.size > 5000) {
+    for (const [key, times] of requestLog) {
+      if (times.every((t) => now - t >= RATE_LIMIT_WINDOW_MS)) {
+        requestLog.delete(key);
+      }
+    }
+  }
+  return false;
+}
+
 function sendSseEvent(res: Response, event: string, data: unknown): void {
   if (res.writableEnded) return;
   res.write(`event: ${event}\n`);
@@ -250,13 +284,13 @@ const REPORT_SCHEMA = {
         properties: {
           name: { type: Type.STRING },
           what_they_do: { type: Type.STRING },
-          source_url: {
-            type: Type.STRING,
+          source_index: {
+            type: Type.INTEGER,
             description:
-              "Must be an exact URL from the provided verified search sources, or empty string if unverified.",
+              "The number of the entry in the VERIFIED SOURCES list that backs this competitor, or 0 if no listed source backs it.",
           },
         },
-        required: ["name", "what_they_do", "source_url"],
+        required: ["name", "what_they_do", "source_index"],
       },
     },
     blueprint: {
@@ -335,7 +369,17 @@ const REPORT_SCHEMA = {
 
 async function startServer(): Promise<void> {
   const app = express();
-  app.use(express.json({ limit: "1mb" }));
+  // Behind a single reverse proxy (Cloud Run etc.) so req.ip is the real client.
+  app.set("trust proxy", 1);
+  app.use(express.json({ limit: "100kb" }));
+
+  app.get("/api/health", (_req: Request, res: Response) => {
+    res.json({
+      ok: true,
+      model: MODEL_NAME,
+      apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+    });
+  });
 
   app.post("/api/analyze", async (req: Request, res: Response) => {
     const rawIdea =
@@ -352,9 +396,28 @@ async function startServer(): Promise<void> {
       return;
     }
 
+    if (
+      rawIdea.length > MAX_IDEA_CHARS ||
+      clarification.length > MAX_CLARIFICATION_CHARS
+    ) {
+      res.status(400).json({
+        error: `That is too long to analyze. Keep the idea under ${MAX_IDEA_CHARS} characters.`,
+      });
+      return;
+    }
+
+    if (isRateLimited(req.ip ?? "unknown")) {
+      res.status(429).json({
+        error: "Too many analyses from this connection. Wait a few minutes and try again.",
+      });
+      return;
+    }
+
+    // res "close" fires when the connection drops; req "close" fires as soon as
+    // the request body has been read, so it cannot be used to detect disconnects.
     let clientDisconnected = false;
-    req.on("close", () => {
-      clientDisconnected = true;
+    res.on("close", () => {
+      if (!res.writableEnded) clientDisconnected = true;
     });
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -489,7 +552,7 @@ GROUNDED RESEARCH NOTES:
 ${researchNotes || "No grounded research notes were retrieved."}
 """
 
-VERIFIED SOURCE URLS FROM GOOGLE SEARCH:
+VERIFIED SOURCES FROM GOOGLE SEARCH (numbered):
 ${sourcesBlock}
 
 PRE-EXISTING GROUNDING FLAGS:
@@ -498,7 +561,7 @@ ${preGroundingFlags.length > 0 ? preGroundingFlags.join("\n") : "None"}
 RULES:
 - Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
 - Notice founder_fit: if the founder gave no background/credentials in their input, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
-- Competitors: ONLY include competitors backed by the grounded research notes and verified source URLs above (or explicitly named by the founder). Every competitor's source_url MUST be copied verbatim from VERIFIED SOURCE URLS above, or set to "" if unverified. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
+- Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
 - Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
 - grounding_flags: list every important claim, competitor figure, market size, or assumption that could not be verified from the retrieved sources.`;
 
@@ -531,28 +594,31 @@ RULES:
       const parsed = JSON.parse(rawJson) as RawReport;
 
       // Enforce strict grounding integrity on server output
-      const verifiedUrlSet = new Set(verifiedSources.map((s) => s.url));
       const finalFlags = new Set<string>(
         [...preGroundingFlags, ...(parsed.grounding_flags ?? [])]
           .map((f) => f.trim())
           .filter(Boolean)
       );
 
-      const sanitizedCompetitors: RawCompetitor[] = [];
+      const sanitizedCompetitors: ReportCompetitor[] = [];
       for (const comp of parsed.competitors ?? []) {
-        const cleanUrl = (comp.source_url ?? "").trim();
-        if (cleanUrl && verifiedUrlSet.has(cleanUrl)) {
+        const name = (comp.name ?? "").trim();
+        if (!name) continue;
+        const source = Number.isInteger(comp.source_index)
+          ? verifiedSources[comp.source_index - 1]
+          : undefined;
+        if (source) {
           sanitizedCompetitors.push({
-            name: comp.name.trim(),
-            what_they_do: comp.what_they_do.trim(),
-            source_url: cleanUrl,
+            name,
+            what_they_do: (comp.what_they_do ?? "").trim(),
+            source_url: source.url,
           });
         } else if (verifiedSources.length === 0) {
           // Grounding failed or returned zero sources; do not emit unverified competitor claims
           finalFlags.add("Could not verify competitors");
         } else {
           finalFlags.add(
-            `Could not verify source URL for competitor "${comp.name.trim()}".`
+            `Could not verify a source for competitor "${name}"; it was left out.`
           );
         }
       }
