@@ -1,5 +1,5 @@
 -- FORGE workspaces: one row per idea, one report row per analysis run.
--- Run this once in the Supabase SQL editor (or with `supabase db push`).
+-- Run after 0000 in the Supabase SQL editor (or with `supabase db push`).
 
 create table public.ideas (
   id uuid primary key default gen_random_uuid(),
