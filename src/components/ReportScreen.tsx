@@ -5,13 +5,23 @@ import {
   Check,
   Copy,
   ExternalLink,
+  Plus,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
-import type { StoredForgeReport } from "../lib/analyzeIdea";
+import type { Idea, StoredForgeReport } from "../lib/analyzeIdea";
 import { formatReportAsMarkdown, getVerdictLabel } from "../lib/storage";
 
 interface ReportScreenProps {
-  report: StoredForgeReport;
-  onValidateAnother: () => void;
+  idea: Idea;
+  /** Which report to show; null means the latest. */
+  activeVersionId: string | null;
+  onSelectVersion: (versionId: string) => void;
+  warning: string | null;
+  onBack: () => void;
+  onNewIdea: () => void;
+  onRevise: () => void;
+  onDelete: () => void;
 }
 
 const BREAKDOWN_LABELS: Array<{
@@ -26,12 +36,27 @@ const BREAKDOWN_LABELS: Array<{
 ];
 
 export function ReportScreen({
-  report,
-  onValidateAnother,
+  idea,
+  activeVersionId,
+  onSelectVersion,
+  warning,
+  onBack,
+  onNewIdea,
+  onRevise,
+  onDelete,
 }: ReportScreenProps) {
   const [copied, setCopied] = useState(false);
+  // Versions are stored newest first; number them oldest = v1.
+  const versionIndex = Math.max(
+    0,
+    idea.versions.findIndex((v) => v.id === activeVersionId)
+  );
+  const report = idea.versions[versionIndex];
+  const previous = idea.versions[versionIndex + 1];
+  const versionNumber = idea.versions.length - versionIndex;
   const { data } = report;
   const overall = data.idea_score.overall;
+  const delta = previous ? overall - previous.data.idea_score.overall : null;
   const verdict = getVerdictLabel(overall);
 
   const handleCopyMarkdown = async () => {
@@ -65,44 +90,110 @@ export function ReportScreen({
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
       {/* Top Action Strip */}
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-baseline gap-3">
-          <span className="font-display text-xl font-bold tracking-tight text-[#18181B]">
-            FORGE
-          </span>
-          <span className="text-xs text-[#6B6B65]">
-            Reality-check report
-          </span>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
+      <header className="mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <button
             type="button"
-            onClick={handleCopyMarkdown}
-            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0"
-          >
-            {copied ? (
-              <>
-                <Check className="h-4 w-4 text-[#F97316]" />
-                <span>Copied</span>
-              </>
-            ) : (
-              <>
-                <Copy className="h-4 w-4 text-[#575752]" />
-                <span>Copy as Markdown</span>
-              </>
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={onValidateAnother}
-            className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] whitespace-nowrap shrink-0"
+            onClick={onBack}
+            className="inline-flex min-h-[44px] cursor-pointer items-center gap-2 text-sm font-medium text-[#575752] hover:text-[#18181B]"
           >
             <ArrowLeft className="h-4 w-4" />
-            <span>Validate another idea</span>
+            <span>
+              <span className="font-display font-bold tracking-tight text-[#18181B]">
+                FORGE
+              </span>{" "}
+              · All ideas
+            </span>
+          </button>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button type="button" onClick={handleCopyMarkdown} className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0">
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4 text-[#F97316]" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4 text-[#575752]" />
+                  <span>Copy as Markdown</span>
+                </>
+              )}
+            </button>
+
+            <button type="button" onClick={onNewIdea} className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0">
+              <Plus className="h-4 w-4 text-[#575752]" />
+              <span>New idea</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={onRevise}
+              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] whitespace-nowrap shrink-0"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Revise and re-run</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
+              {idea.title}
+            </h1>
+            <p className="mt-1 text-xs text-[#6B6B65]">
+              Report v{versionNumber} of {idea.versions.length} ·{" "}
+              {new Date(report.createdAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium text-[#787871] underline underline-offset-4 hover:text-[#B91C1C]"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete idea</span>
           </button>
         </div>
+
+        {idea.versions.length > 1 && (
+          <nav aria-label="Report versions" className="mt-4 flex flex-wrap gap-2">
+            {idea.versions.map((v, idx) => {
+              const isActive = idx === versionIndex;
+              return (
+                <button
+                  key={v.id}
+                  type="button"
+                  aria-current={isActive ? "true" : undefined}
+                  onClick={() => onSelectVersion(v.id)}
+                  className={`inline-flex min-h-[36px] cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 font-mono text-xs tabular-nums transition-colors ${
+                    isActive
+                      ? "border-[#18181B] bg-[#18181B] text-white"
+                      : "border-[#DFDED8] bg-white text-[#3F3F46] hover:bg-[#FAFAF8]"
+                  }`}
+                >
+                  <span>v{idea.versions.length - idx}</span>
+                  <span className={isActive ? "text-[#D4D4D8]" : "text-[#787871]"}>
+                    {v.data.idea_score.overall}/100
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        )}
+
+        {warning && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl border border-[#F5C2C0] bg-[#FEF2F2] p-4 text-sm text-[#991B1B]"
+          >
+            {warning}
+          </p>
+        )}
       </header>
 
       <div className="space-y-6">
@@ -127,6 +218,20 @@ export function ReportScreen({
                 <span className="font-mono text-lg text-[#787871] tabular-nums">
                   / 100
                 </span>
+                {delta !== null && (
+                  <span
+                    className={`font-mono text-sm tabular-nums ${
+                      delta > 0
+                        ? "text-[#15803D]"
+                        : delta < 0
+                        ? "text-[#B91C1C]"
+                        : "text-[#787871]"
+                    }`}
+                  >
+                    {delta > 0 ? `+${delta}` : delta === 0 ? "no change" : delta}{" "}
+                    {delta === 0 ? `from v${versionNumber - 1}` : `vs v${versionNumber - 1}`}
+                  </span>
+                )}
               </div>
 
               <h2 className="mt-3 font-display text-xl font-semibold text-[#18181B] sm:text-2xl">
@@ -142,6 +247,15 @@ export function ReportScreen({
                 <p className="mt-1 text-sm leading-relaxed text-[#3F3F46]">
                   {data.idea_summary}
                 </p>
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs font-medium text-[#6B6B65] hover:text-[#18181B]">
+                    What you wrote for this version
+                  </summary>
+                  <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap text-[#575752]">
+                    {report.rawIdea}
+                    {report.clarification ? `\n\n${report.clarification}` : ""}
+                  </p>
+                </details>
               </div>
             </div>
 

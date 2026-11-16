@@ -4,12 +4,23 @@ import type { Request, Response } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
 const MODEL_NAME = process.env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
+// Same two values the browser uses. When both are set, sign-in is required.
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL?.trim();
+const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY?.trim();
+const supabaseAuth =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      })
+    : null;
+
 const MAX_IDEA_CHARS = 6000;
 const MAX_CLARIFICATION_CHARS = 2000;
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
@@ -41,6 +52,7 @@ interface ReportCompetitor {
 }
 
 interface RawReport {
+  idea_title: string;
   idea_summary: string;
   idea_score: {
     overall: number;
@@ -177,7 +189,7 @@ function clamp(num: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, num));
 }
 
-// Per-IP sliding window. In-memory, so it resets on restart and is per-instance.
+// Sliding window per signed-in user, or per IP when sign-in is off. In-memory, so it resets on restart and is per-instance.
 const requestLog = new Map<string, number[]>();
 
 function isRateLimited(ip: string): boolean {
@@ -227,6 +239,11 @@ const CLARITY_SCHEMA = {
 const REPORT_SCHEMA = {
   type: Type.OBJECT,
   properties: {
+    idea_title: {
+      type: Type.STRING,
+      description:
+        "Plain 3-7 word name for the idea, like a project title. No hype, no trailing punctuation.",
+    },
     idea_summary: {
       type: Type.STRING,
       description: "Plain 1-2 sentence summary of the startup idea.",
@@ -356,6 +373,7 @@ const REPORT_SCHEMA = {
     },
   },
   required: [
+    "idea_title",
     "idea_summary",
     "idea_score",
     "swot",
@@ -378,6 +396,7 @@ async function startServer(): Promise<void> {
       ok: true,
       model: MODEL_NAME,
       apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      signInRequired: Boolean(supabaseAuth),
     });
   });
 
@@ -406,9 +425,25 @@ async function startServer(): Promise<void> {
       return;
     }
 
-    if (isRateLimited(req.ip ?? "unknown")) {
+    let userId: string | null = null;
+    if (supabaseAuth) {
+      const header = req.headers.authorization ?? "";
+      const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+      const { data, error } = token
+        ? await supabaseAuth.auth.getUser(token)
+        : { data: { user: null }, error: null };
+      if (error || !data.user) {
+        res.status(401).json({
+          error: "Your session has expired. Sign in again to run an analysis.",
+        });
+        return;
+      }
+      userId = data.user.id;
+    }
+
+    if (isRateLimited(userId ?? req.ip ?? "unknown")) {
       res.status(429).json({
-        error: "Too many analyses from this connection. Wait a few minutes and try again.",
+        error: "Too many analyses in a short time. Wait a few minutes and try again.",
       });
       return;
     }
@@ -640,6 +675,7 @@ RULES:
       }
 
       const report = {
+        idea_title: (parsed.idea_title ?? "").trim().slice(0, 80),
         idea_summary: (parsed.idea_summary ?? "").trim(),
         idea_score: {
           overall: Math.round(clamp(parsed.idea_score?.overall ?? 0, 0, 100)),

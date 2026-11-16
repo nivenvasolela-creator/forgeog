@@ -21,6 +21,8 @@ export interface ForgeSource {
 }
 
 export interface ForgeReportData {
+  /** Short name for the idea. Missing on reports saved before workspaces existed. */
+  idea_title?: string;
   idea_summary: string;
   idea_score: {
     overall: number;
@@ -67,6 +69,18 @@ export interface StoredForgeReport {
   data: ForgeReportData;
 }
 
+/** One analysis run of an idea. */
+export type IdeaVersion = StoredForgeReport;
+
+/** A workspace: one idea and every report run against it, newest first. */
+export interface Idea {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  versions: IdeaVersion[];
+}
+
 export type AnalyzeIdeaResult =
   | { status: "clarification_needed"; question: string }
   | { status: "complete"; report: ForgeReportData };
@@ -74,6 +88,8 @@ export type AnalyzeIdeaResult =
 export interface AnalyzeIdeaOptions {
   clarification?: string;
   onPhase?: (phaseIndex: number) => void;
+  /** Supabase access token; required by the server when sign-in is enabled. */
+  accessToken?: string;
   timeoutMs?: number;
 }
 
@@ -103,6 +119,9 @@ export async function analyzeIdea(
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...(options.accessToken
+          ? { Authorization: `Bearer ${options.accessToken}` }
+          : {}),
       },
       body: JSON.stringify({
         rawIdea: trimmedIdea,
