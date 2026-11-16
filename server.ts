@@ -124,7 +124,7 @@ function isTransientError(err: unknown): boolean {
   );
 }
 
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -132,7 +132,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     } catch (err) {
       lastError = err;
       if (attempt < maxAttempts && isTransientError(err)) {
-        const delayMs = 800 * attempt;
+        const delayMs = 1000 * 2 ** (attempt - 1);
         await new Promise((resolve) => setTimeout(resolve, delayMs));
         continue;
       }
@@ -516,12 +516,19 @@ async function startServer(): Promise<void> {
           );
         }
       } catch (researchErr) {
-        if (isFatalApiError(researchErr)) {
+        // A quota error here usually means the key's plan does not include
+        // Google Search grounding. Carry on ungrounded and say so in the report;
+        // if the whole key is out of quota the analysis call below fails anyway.
+        const quotaError = /RESOURCE_EXHAUSTED|429|quota/i.test(
+          researchErr instanceof Error ? researchErr.message : String(researchErr)
+        );
+        if (isFatalApiError(researchErr) && !quotaError) {
           throw researchErr;
         }
-        const reason = formatApiError(researchErr);
         preGroundingFlags.push(
-          `Could not verify competitors (${reason}).`
+          quotaError
+            ? "Could not verify competitors: live web search is not available on this Gemini API key's plan. Nothing in this report was checked against the web."
+            : `Could not verify competitors (${formatApiError(researchErr)}).`
         );
       }
 
