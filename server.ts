@@ -10,12 +10,13 @@ import {
   MESSAGES,
   verifyUser,
 } from "./supabase/functions/_shared/access.ts";
-import { createLlm } from "./supabase/functions/_shared/llm.ts";
+import { createLlmChain, describeChain } from "./supabase/functions/_shared/llm.ts";
 import { createSearch } from "./supabase/functions/_shared/search.ts";
 import { prepareJob } from "./supabase/functions/_shared/router.ts";
 
 const PORT = Number(process.env.PORT) || 3000;
-const llm = createLlm(process.env);
+// Gemini first when GEMINI_API_KEY is set, then the OpenAI-compatible provider.
+const llm = createLlmChain(process.env);
 const search = createSearch(process.env);
 
 // Same two values the browser uses. When both are set, sign-in is required.
@@ -39,6 +40,7 @@ async function startServer(): Promise<void> {
       ok: true,
       provider: llm.label,
       model: llm.model,
+      providers: describeChain(process.env),
       apiKeyConfigured: llm.keyConfigured,
       webSearch: Boolean(search ?? llm.research),
       signInRequired,
