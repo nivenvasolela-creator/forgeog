@@ -1,3 +1,6 @@
+import type { FounderProfile } from "./profile";
+import type { Language } from "./i18n";
+
 export const STRESS_TEST_PHASES = [
   "Problem",
   "Customer",
@@ -57,8 +60,63 @@ export interface ForgeReportData {
     go_to_market: string;
     pricing_hypothesis: string;
   };
+  /** FORGE's call on the idea. Missing on reports made before decisions existed. */
+  decision?: ForgeDecision;
   grounding_flags: string[];
   sources: ForgeSource[];
+}
+
+export type DecisionCall = "go" | "pivot" | "kill";
+
+export interface ForgeDecision {
+  call: DecisionCall;
+  reason: string;
+  /** Sharper alternative ideas; empty for "go". */
+  pivots: string[];
+}
+
+export interface SprintTask {
+  title: string;
+  why: string;
+  steps: string[];
+  material_title: string;
+  material: string;
+}
+
+export interface SprintDay {
+  day: number;
+  theme: string;
+  tasks: SprintTask[];
+}
+
+export interface SprintPlan {
+  goal: string;
+  success_metric: string;
+  days: SprintDay[];
+}
+
+/** The current 7-day plan for an idea and which of its tasks are done. */
+export interface Sprint {
+  plan: SprintPlan;
+  /** Keys of finished tasks, "day-task" with zero-based task index, e.g. "1-0". */
+  done: string[];
+  createdAt: string;
+}
+
+export function sprintTaskKey(day: number, taskIndex: number): string {
+  return `${day}-${taskIndex}`;
+}
+
+export function sprintTotals(sprint: Sprint): { done: number; total: number } {
+  const keys = new Set(
+    sprint.plan.days.flatMap((d) =>
+      d.tasks.map((_, i) => sprintTaskKey(d.day, i)),
+    ),
+  );
+  return {
+    done: sprint.done.filter((k) => keys.has(k)).length,
+    total: keys.size,
+  };
 }
 
 export interface StoredForgeReport {
@@ -98,7 +156,7 @@ export function completedEvidence(experiments: Experiment[]): EvidenceItem[] {
   return experiments.flatMap((e) =>
     e.status === "done" && e.outcome
       ? [{ title: e.title, outcome: e.outcome, notes: e.notes }]
-      : []
+      : [],
   );
 }
 
@@ -112,6 +170,8 @@ export interface Idea {
   versions: IdeaVersion[];
   /** Oldest first. */
   experiments: Experiment[];
+  /** The idea's 7-day launch sprint, once one has been built. */
+  sprint: Sprint | null;
 }
 
 export type AnalyzeIdeaResult =
@@ -126,27 +186,48 @@ export interface AnalyzeIdeaOptions {
   /** Supabase access token; required by the server when sign-in is enabled. */
   accessToken?: string;
   timeoutMs?: number;
+  profile?: FounderProfile | null;
+  language?: Language;
 }
 
 // The hosted build points this at the Supabase Edge Function; self-hosted
 // builds use the Node server on the same origin.
 const ANALYZE_URL = import.meta.env.VITE_API_URL?.trim() || "/api/analyze";
 
-export async function analyzeIdea(
-  rawIdea: string,
-  options: AnalyzeIdeaOptions = {}
-): Promise<AnalyzeIdeaResult> {
-  const trimmedIdea = rawIdea.trim();
-  if (!trimmedIdea) {
-    throw new Error(
-      "Enter your startup idea first so there is something to test."
-    );
+type StreamEvent = { name: string; payload: Record<string, unknown> };
+
+/**
+ * The connection closed before FORGE sent a result. The hosted API stops a
+ * worker 150 s after it starts, which can cut off a request it is still
+ * serving; a second try normally lands on a fresh worker.
+ */
+class StreamCutError extends Error {}
+
+const MAX_STREAM_ATTEMPTS = 2;
+
+async function withStreamRetry<T>(run: () => Promise<T>): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      if (!(err instanceof StreamCutError) || attempt >= MAX_STREAM_ATTEMPTS)
+        throw err;
+    }
   }
+}
 
+/**
+ * POSTs a job to the FORGE API and reads its server-sent events until the
+ * stream ends. onEvent may return a value to finish with; "error" events throw.
+ */
+async function streamJob<T>(
+  body: Record<string, unknown>,
+  accessToken: string | undefined,
+  timeoutMs: number,
+  onEvent: (event: StreamEvent) => T | undefined,
+): Promise<T> {
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs ?? 180_000;
   let didTimeout = false;
-
   const timer = window.setTimeout(() => {
     didTimeout = true;
     controller.abort();
@@ -158,15 +239,9 @@ export async function analyzeIdea(
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
-        ...(options.accessToken
-          ? { Authorization: `Bearer ${options.accessToken}` }
-          : {}),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: JSON.stringify({
-        rawIdea: trimmedIdea,
-        clarification: options.clarification?.trim() || undefined,
-        evidence: options.evidence?.length ? options.evidence : undefined,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -188,7 +263,7 @@ export async function analyzeIdea(
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
-    let result: AnalyzeIdeaResult | null = null;
+    let result: T | undefined;
 
     while (true) {
       const { value, done } = await reader.read();
@@ -199,69 +274,153 @@ export async function analyzeIdea(
       buffer = blocks.pop() ?? "";
 
       for (const block of blocks) {
-        const lines = block.split("\n");
-        let eventName = "message";
+        let name = "message";
         const dataLines: string[] = [];
-
-        for (const line of lines) {
-          if (line.startsWith("event:")) {
-            eventName = line.slice(6).trim();
-          } else if (line.startsWith("data:")) {
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) name = line.slice(6).trim();
+          else if (line.startsWith("data:"))
             dataLines.push(line.slice(5).trim());
-          }
         }
-
         if (dataLines.length === 0) continue;
-        const payloadText = dataLines.join("\n");
-        const payload = JSON.parse(payloadText) as Record<string, unknown>;
+        const payload = JSON.parse(dataLines.join("\n")) as Record<
+          string,
+          unknown
+        >;
+        if (name === "error") {
+          throw new Error(
+            typeof payload.error === "string"
+              ? payload.error
+              : "The request failed unexpectedly.",
+          );
+        }
+        const outcome = onEvent({ name, payload });
+        if (outcome !== undefined) result = outcome;
+      }
+    }
 
-        if (eventName === "phase") {
+    if (result === undefined) {
+      throw new StreamCutError(
+        "The connection ended before FORGE finished. Please try again.",
+      );
+    }
+    return result;
+  } catch (err) {
+    if (err instanceof StreamCutError) throw err;
+    if (didTimeout) {
+      throw new Error(
+        "The request timed out before FORGE finished. Please try again.",
+      );
+    }
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("The request was cancelled.");
+    }
+    // A dropped connection mid-stream surfaces as a TypeError from fetch.
+    if (err instanceof TypeError) {
+      throw new StreamCutError(
+        "The connection to FORGE dropped. Please try again.",
+      );
+    }
+    if (err instanceof Error) throw err;
+    throw new Error("Unable to reach FORGE. Please try again.");
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export async function analyzeIdea(
+  rawIdea: string,
+  options: AnalyzeIdeaOptions = {},
+): Promise<AnalyzeIdeaResult> {
+  const trimmedIdea = rawIdea.trim();
+  if (!trimmedIdea) {
+    throw new Error(
+      "Enter your startup idea first so there is something to test.",
+    );
+  }
+  return withStreamRetry(() =>
+    streamJob<AnalyzeIdeaResult>(
+      {
+        rawIdea: trimmedIdea,
+        clarification: options.clarification?.trim() || undefined,
+        evidence: options.evidence?.length ? options.evidence : undefined,
+        profile: options.profile ?? undefined,
+        language: options.language ?? "en",
+      },
+      options.accessToken,
+      options.timeoutMs ?? 180_000,
+      ({ name, payload }) => {
+        if (name === "phase") {
           const idx = Number(payload.phaseIndex);
-          if (Number.isFinite(idx)) {
-            options.onPhase?.(idx);
-          }
-        } else if (eventName === "clarification") {
+          if (Number.isFinite(idx)) options.onPhase?.(idx);
+        } else if (name === "clarification") {
           const question =
             typeof payload.question === "string" ? payload.question.trim() : "";
-          if (!question) {
+          if (!question)
             throw new Error("Received an invalid clarifying question.");
-          }
-          result = { status: "clarification_needed", question };
-        } else if (eventName === "report") {
+          return { status: "clarification_needed", question };
+        } else if (name === "report") {
           const report = payload.report as ForgeReportData | undefined;
           if (!report || !report.idea_score) {
             throw new Error("Received an incomplete report from the server.");
           }
-          result = { status: "complete", report };
-        } else if (eventName === "error") {
-          const errMsg =
-            typeof payload.error === "string"
-              ? payload.error
-              : "Analysis failed unexpectedly.";
-          throw new Error(errMsg);
+          return { status: "complete", report };
         }
-      }
-    }
+        return undefined;
+      },
+    ),
+  );
+}
 
-    if (!result) {
-      throw new Error("The analysis stream ended before returning a report.");
-    }
+export interface BuildSprintOptions {
+  accessToken?: string;
+  profile?: FounderProfile | null;
+  language?: Language;
+}
 
-    return result;
-  } catch (err) {
-    if (didTimeout) {
-      throw new Error(
-        "The request timed out before analysis completed. Please try again."
-      );
-    }
-    if (err instanceof DOMException && err.name === "AbortError") {
-      throw new Error("Analysis was cancelled.");
-    }
-    if (err instanceof Error) {
-      throw err;
-    }
-    throw new Error("Unable to reach the analysis service. Please try again.");
-  } finally {
-    window.clearTimeout(timer);
-  }
+/** Asks FORGE for a 7-day launch sprint based on the idea's latest report. */
+export async function buildSprintPlan(
+  idea: Idea,
+  options: BuildSprintOptions = {},
+): Promise<SprintPlan> {
+  const latest = idea.versions[0];
+  const { data } = latest;
+  const decision = data.decision
+    ? `${data.decision.call.toUpperCase()}: ${data.decision.reason}`
+    : "";
+  const blueprint = [
+    `Problem: ${data.blueprint.problem}`,
+    `Target user: ${data.blueprint.target_user}`,
+    `Solution: ${data.blueprint.solution}`,
+    `Business model: ${data.blueprint.business_model}`,
+    `Go-to-market: ${data.business_plan.go_to_market}`,
+    `Pricing hypothesis: ${data.business_plan.pricing_hypothesis}`,
+  ].join("\n");
+  const doneTasks = [
+    ...idea.experiments.filter((e) => e.status === "done").map((e) => e.title),
+  ];
+  return withStreamRetry(() =>
+    streamJob<SprintPlan>(
+      {
+        mode: "sprint",
+        ideaTitle: idea.title,
+        ideaSummary: data.idea_summary || latest.rawIdea,
+        decision,
+        blueprint,
+        validateNext: data.blueprint.validate_next,
+        doneTasks,
+        profile: options.profile ?? undefined,
+        language: options.language ?? "en",
+      },
+      options.accessToken,
+      180_000,
+      ({ name, payload }) => {
+        if (name !== "sprint") return undefined;
+        const plan = payload.plan as SprintPlan | undefined;
+        if (!plan || !Array.isArray(plan.days) || plan.days.length === 0) {
+          throw new Error("Received an incomplete plan from the server.");
+        }
+        return plan;
+      },
+    ),
+  );
 }

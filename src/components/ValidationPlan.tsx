@@ -6,6 +6,7 @@ import {
   type ExperimentOutcome,
   type ExperimentStatus,
 } from "../lib/analyzeIdea";
+import { useI18n } from "../lib/i18n";
 import type { ExperimentPatch } from "../lib/store";
 
 interface ValidationPlanProps {
@@ -18,17 +19,8 @@ interface ValidationPlanProps {
   onRerun: () => void;
 }
 
-const STATUS_LABELS: Record<ExperimentStatus, string> = {
-  todo: "To do",
-  running: "In progress",
-  done: "Done",
-};
-
-const OUTCOME_LABELS: Record<ExperimentOutcome, string> = {
-  supported: "Supported the idea",
-  refuted: "Went against the idea",
-  inconclusive: "Inconclusive",
-};
+const STATUSES: ExperimentStatus[] = ["todo", "running", "done"];
+const OUTCOMES: ExperimentOutcome[] = ["supported", "refuted", "inconclusive"];
 
 const selectClass =
   "min-h-[36px] cursor-pointer rounded-lg border border-[#DFDED8] bg-white px-2.5 py-1.5 text-xs font-medium text-[#18181B] focus:border-[#F97316] focus:ring-2 focus:ring-[#F97316]/15 focus:outline-none";
@@ -41,6 +33,7 @@ export function ValidationPlan({
   onDelete,
   onRerun,
 }: ValidationPlanProps) {
+  const { t } = useI18n();
   const [draft, setDraft] = useState("");
   const doneCount = experiments.filter((e) => e.status === "done").length;
   const evidenceCount = completedEvidence(experiments).length;
@@ -63,22 +56,21 @@ export function ValidationPlan({
           id="validation-plan-heading"
           className="font-display text-lg font-semibold text-[#18181B]"
         >
-          Validation plan
+          {t.validationPlan}
         </h2>
         {experiments.length > 0 && (
           <span className="font-mono text-xs tabular-nums text-[#6B6B65]">
-            {doneCount} of {experiments.length} done
+            {t.doneOf(doneCount, experiments.length)}
           </span>
         )}
       </div>
       <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[#575752]">
-        The score only moves on evidence. Run these in the real world, record
-        what happened, then re-run the idea so the report weighs your results.
+        {t.validationIntro}
       </p>
 
       {disabled ? (
         <p className="mt-4 text-sm text-[#787871]">
-          This idea was not saved, so a plan cannot be kept for it.
+          {t.planNotSaved}
         </p>
       ) : (
         <>
@@ -97,14 +89,14 @@ export function ValidationPlan({
 
           <form onSubmit={handleAdd} className="mt-4 flex flex-col gap-2 sm:flex-row">
             <label htmlFor="new-experiment" className="sr-only">
-              Add an experiment
+              {t.addExperiment}
             </label>
             <input
               id="new-experiment"
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               maxLength={500}
-              placeholder="Add your own experiment, e.g. Interview 10 target users"
+              placeholder={t.addExperimentPlaceholder}
               className="min-h-[44px] w-full flex-1 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm text-[#18181B] placeholder-[#9B9B94] focus:border-[#F97316] focus:ring-2 focus:ring-[#F97316]/15 focus:outline-none"
             />
             <button
@@ -113,17 +105,14 @@ export function ValidationPlan({
               className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
-              <span>Add</span>
+              <span>{t.add}</span>
             </button>
           </form>
 
           {evidenceCount > 0 && (
             <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm leading-relaxed text-[#3F3F46]">
-                {evidenceCount === 1
-                  ? "1 finished experiment is"
-                  : `${evidenceCount} finished experiments are`}{" "}
-                ready to be weighed in a new report.
+                {t.readyToWeigh(evidenceCount)}
               </p>
               <button
                 type="button"
@@ -131,7 +120,7 @@ export function ValidationPlan({
                 className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C]"
               >
                 <RefreshCw className="h-4 w-4" />
-                <span>Re-run with results</span>
+                <span>{t.rerunWithResults}</span>
               </button>
             </div>
           )}
@@ -150,6 +139,7 @@ function ExperimentRow({
   onUpdate: (patch: ExperimentPatch) => void;
   onDelete: () => void;
 }) {
+  const { t } = useI18n();
   // Notes are edited locally and saved when the field loses focus.
   const [notes, setNotes] = useState(experiment.notes);
   const isDone = experiment.status === "done";
@@ -166,23 +156,23 @@ function ExperimentRow({
         </p>
         <div className="flex shrink-0 items-center gap-2">
           <select
-            aria-label={`Status of: ${experiment.title}`}
+            aria-label={t.statusOf(experiment.title)}
             value={experiment.status}
             onChange={(e) =>
               onUpdate({ status: e.target.value as ExperimentStatus })
             }
             className={selectClass}
           >
-            {(Object.keys(STATUS_LABELS) as ExperimentStatus[]).map((s) => (
+            {STATUSES.map((s) => (
               <option key={s} value={s}>
-                {STATUS_LABELS[s]}
+                {t.statusLabels[s]}
               </option>
             ))}
           </select>
           <button
             type="button"
             onClick={onDelete}
-            aria-label={`Remove: ${experiment.title}`}
+            aria-label={t.removeItem(experiment.title)}
             className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg text-[#9B9B94] transition-colors hover:bg-[#FEF2F2] hover:text-[#B91C1C]"
           >
             <X className="h-4 w-4" />
@@ -193,7 +183,7 @@ function ExperimentRow({
       {isDone && (
         <div className="mt-3 rounded-xl bg-[#FAFAF8] p-4">
           <label className="flex flex-col gap-1.5 text-xs font-medium text-[#6B6B65] sm:flex-row sm:items-center sm:gap-3">
-            <span>Result</span>
+            <span>{t.result}</span>
             <select
               value={experiment.outcome ?? ""}
               onChange={(e) =>
@@ -203,16 +193,16 @@ function ExperimentRow({
               }
               className={selectClass}
             >
-              <option value="">Choose a result...</option>
-              {(Object.keys(OUTCOME_LABELS) as ExperimentOutcome[]).map((o) => (
+              <option value="">{t.chooseResult}</option>
+              {OUTCOMES.map((o) => (
                 <option key={o} value={o}>
-                  {OUTCOME_LABELS[o]}
+                  {t.outcomeLabels[o]}
                 </option>
               ))}
             </select>
           </label>
           <label className="mt-3 block text-xs font-medium text-[#6B6B65]">
-            What happened
+            {t.whatHappened}
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
@@ -223,13 +213,13 @@ function ExperimentRow({
               }}
               rows={2}
               maxLength={4000}
-              placeholder="Specifics count: who, how many, what they said, did or paid."
+              placeholder={t.notesPlaceholder}
               className="mt-1.5 w-full resize-y rounded-lg border border-[#DFDED8] bg-white px-3 py-2 text-sm font-normal leading-relaxed text-[#18181B] placeholder-[#9B9B94] focus:border-[#F97316] focus:ring-2 focus:ring-[#F97316]/15 focus:outline-none"
             />
           </label>
           {!experiment.outcome && (
             <p className="mt-2 text-xs text-[#C2410C]">
-              Choose a result so this counts in your next re-run.
+              {t.chooseResultHint}
             </p>
           )}
         </div>

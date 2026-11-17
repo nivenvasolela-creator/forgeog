@@ -10,8 +10,11 @@ import {
   Trash2,
 } from "lucide-react";
 import type { Idea, StoredForgeReport } from "../lib/analyzeIdea";
-import { formatReportAsMarkdown, getVerdictLabel } from "../lib/storage";
+import { LanguageToggle, useI18n } from "../lib/i18n";
+import { formatReportAsMarkdown } from "../lib/storage";
 import type { ExperimentPatch } from "../lib/store";
+import { DecisionCard } from "./DecisionCard";
+import { SprintPanel } from "./SprintPanel";
 import { ValidationPlan } from "./ValidationPlan";
 
 interface ReportScreenProps {
@@ -28,17 +31,20 @@ interface ReportScreenProps {
   onAddExperiments: (titles: string[]) => void;
   onUpdateExperiment: (experimentId: string, patch: ExperimentPatch) => void;
   onDeleteExperiment: (experimentId: string) => void;
+  onTestIdea: (text: string) => void;
+  sprintBuilding: boolean;
+  sprintError: string | null;
+  showProfileTip: boolean;
+  onBuildSprint: () => void;
+  onToggleSprintTask: (key: string) => void;
 }
 
-const BREAKDOWN_LABELS: Array<{
-  key: keyof StoredForgeReport["data"]["idea_score"]["breakdown"];
-  label: string;
-}> = [
-  { key: "problem_clarity", label: "Problem clarity" },
-  { key: "market_signal", label: "Market signal" },
-  { key: "founder_fit", label: "Founder fit" },
-  { key: "feasibility", label: "Feasibility" },
-  { key: "differentiation", label: "Differentiation" },
+const BREAKDOWN_KEYS: Array<keyof StoredForgeReport["data"]["idea_score"]["breakdown"]> = [
+  "problem_clarity",
+  "market_signal",
+  "founder_fit",
+  "feasibility",
+  "differentiation",
 ];
 
 export function ReportScreen({
@@ -54,7 +60,14 @@ export function ReportScreen({
   onAddExperiments,
   onUpdateExperiment,
   onDeleteExperiment,
+  onTestIdea,
+  sprintBuilding,
+  sprintError,
+  showProfileTip,
+  onBuildSprint,
+  onToggleSprintTask,
 }: ReportScreenProps) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   // Versions are stored newest first; number them oldest = v1.
   const versionIndex = Math.max(
@@ -70,7 +83,7 @@ export function ReportScreen({
   const trackedTitles = new Set(
     idea.experiments.map((e) => e.title.trim().toLowerCase())
   );
-  const verdict = getVerdictLabel(overall);
+  const verdict = t.verdict(overall);
 
   const handleCopyMarkdown = async () => {
     const md = formatReportAsMarkdown(report);
@@ -115,28 +128,29 @@ export function ReportScreen({
               <span className="font-display font-bold tracking-tight text-[#18181B]">
                 FORGE
               </span>{" "}
-              · All ideas
+              · {t.allIdeas}
             </span>
           </button>
 
           <div className="flex flex-wrap items-center gap-3">
+            <LanguageToggle />
             <button type="button" onClick={handleCopyMarkdown} className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0">
               {copied ? (
                 <>
                   <Check className="h-4 w-4 text-[#F97316]" />
-                  <span>Copied</span>
+                  <span>{t.copied}</span>
                 </>
               ) : (
                 <>
                   <Copy className="h-4 w-4 text-[#575752]" />
-                  <span>Copy as Markdown</span>
+                  <span>{t.copyMarkdown}</span>
                 </>
               )}
             </button>
 
             <button type="button" onClick={onNewIdea} className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0">
               <Plus className="h-4 w-4 text-[#575752]" />
-              <span>New idea</span>
+              <span>{t.newIdea}</span>
             </button>
 
             <button
@@ -145,7 +159,7 @@ export function ReportScreen({
               className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] whitespace-nowrap shrink-0"
             >
               <RefreshCw className="h-4 w-4" />
-              <span>Revise and re-run</span>
+              <span>{t.reviseRerun}</span>
             </button>
           </div>
         </div>
@@ -156,7 +170,7 @@ export function ReportScreen({
               {idea.title}
             </h1>
             <p className="mt-1 text-xs text-[#6B6B65]">
-              Report v{versionNumber} of {idea.versions.length} ·{" "}
+              {t.reportOf(versionNumber, idea.versions.length)} ·{" "}
               {new Date(report.createdAt).toLocaleString(undefined, {
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -169,12 +183,12 @@ export function ReportScreen({
             className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 text-xs font-medium text-[#787871] underline underline-offset-4 hover:text-[#B91C1C]"
           >
             <Trash2 className="h-3.5 w-3.5" />
-            <span>Delete idea</span>
+            <span>{t.deleteIdea}</span>
           </button>
         </div>
 
         {idea.versions.length > 1 && (
-          <nav aria-label="Report versions" className="mt-4 flex flex-wrap gap-2">
+          <nav aria-label={t.reportVersions} className="mt-4 flex flex-wrap gap-2">
             {idea.versions.map((v, idx) => {
               const isActive = idx === versionIndex;
               return (
@@ -215,10 +229,12 @@ export function ReportScreen({
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">
             <div className="lg:col-span-7">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs font-medium text-[#6B6B65]">
-                <span>Verdict</span>
+                <span>{t.verdictLabel}</span>
                 <span aria-hidden="true">·</span>
-                <span className="capitalize">
-                  Confidence: {data.idea_score.confidence}
+                <span>
+                  {t.confidence(
+                    t.confidenceWords[data.idea_score.confidence] ?? data.idea_score.confidence
+                  )}
                 </span>
               </div>
 
@@ -241,8 +257,9 @@ export function ReportScreen({
                         : "text-[#787871]"
                     }`}
                   >
-                    {delta > 0 ? `+${delta}` : delta === 0 ? "no change" : delta}{" "}
-                    {delta === 0 ? `from v${versionNumber - 1}` : `vs v${versionNumber - 1}`}
+                    {delta === 0
+                      ? t.noChangeFrom(versionNumber - 1)
+                      : `${delta > 0 ? `+${delta}` : delta} ${t.versus(versionNumber - 1)}`}
                   </span>
                 )}
               </div>
@@ -256,13 +273,13 @@ export function ReportScreen({
               </p>
 
               <div className="mt-5 border-t border-[#ECEBE6] pt-4">
-                <p className="text-xs font-medium text-[#6B6B65]">Idea tested</p>
+                <p className="text-xs font-medium text-[#6B6B65]">{t.ideaTested}</p>
                 <p className="mt-1 text-sm leading-relaxed text-[#3F3F46]">
                   {data.idea_summary}
                 </p>
                 <details className="mt-3">
                   <summary className="cursor-pointer text-xs font-medium text-[#6B6B65] hover:text-[#18181B]">
-                    What you wrote for this version
+                    {t.whatYouWrote}
                   </summary>
                   <p className="mt-2 text-sm leading-relaxed whitespace-pre-wrap text-[#575752]">
                     {report.rawIdea}
@@ -274,10 +291,11 @@ export function ReportScreen({
 
             <div className="border-t border-[#ECEBE6] pt-6 lg:col-span-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-8">
               <h3 className="text-sm font-semibold text-[#18181B]">
-                Score breakdown
+                {t.scoreBreakdown}
               </h3>
               <div className="mt-4 space-y-4">
-                {BREAKDOWN_LABELS.map(({ key, label }) => {
+                {BREAKDOWN_KEYS.map((key) => {
+                  const label = t.breakdown[key];
                   const val = data.idea_score.breakdown[key];
                   const pct = Math.min(100, Math.max(0, (val / 10) * 100));
                   return (
@@ -309,6 +327,20 @@ export function ReportScreen({
           </div>
         </section>
 
+        <DecisionCard decision={data.decision} onTestIdea={onTestIdea} />
+
+        {versionIndex === 0 && (
+          <SprintPanel
+            sprint={idea.sprint}
+            disabled={planDisabled}
+            building={sprintBuilding}
+            error={sprintError}
+            showProfileTip={showProfileTip}
+            onBuild={onBuildSprint}
+            onToggleTask={onToggleSprintTask}
+          />
+        )}
+
         {/* Clearly visible "What I couldn't verify" Card */}
         <section
           aria-labelledby="unverified-heading"
@@ -321,7 +353,7 @@ export function ReportScreen({
                 id="unverified-heading"
                 className="font-display text-lg font-semibold text-[#18181B]"
               >
-                What I couldn&apos;t verify
+                {t.couldntVerify}
               </h2>
               {data.grounding_flags.length > 0 ? (
                 <ul className="mt-3 space-y-2 text-sm leading-relaxed text-[#3F3F46]">
@@ -337,7 +369,7 @@ export function ReportScreen({
                 </ul>
               ) : (
                 <p className="mt-2 text-sm leading-relaxed text-[#3F3F46]">
-                  Competitor references matched retrieved web sources, though market size and pricing figures remain estimates until tested with buyers.
+                  {t.couldntVerifyEmpty}
                 </p>
               )}
             </div>
@@ -356,37 +388,25 @@ export function ReportScreen({
         {/* SWOT 2x2 Grid */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
           <h2 className="font-display text-lg font-semibold text-[#18181B]">
-            SWOT Analysis
+            {t.swot}
           </h2>
 
           <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+            <SwotQuadrant title={t.strengths} items={data.swot.strengths} emptyText={t.noneStrengths} />
+            <SwotQuadrant title={t.weaknesses} items={data.swot.weaknesses} emptyText={t.noneWeaknesses} />
             <SwotQuadrant
-              title="Strengths"
-              items={data.swot.strengths}
-              emptyText="No clear strengths identified from the input."
-            />
-            <SwotQuadrant
-              title="Weaknesses"
-              items={data.swot.weaknesses}
-              emptyText="No weaknesses listed."
-            />
-            <SwotQuadrant
-              title="Opportunities"
+              title={t.opportunities}
               items={data.swot.opportunities}
-              emptyText="No verified opportunities identified."
+              emptyText={t.noneOpportunities}
             />
-            <SwotQuadrant
-              title="Threats"
-              items={data.swot.threats}
-              emptyText="No major threats listed."
-            />
+            <SwotQuadrant title={t.threats} items={data.swot.threats} emptyText={t.noneThreats} />
           </div>
         </section>
 
         {/* Competitors & Sources */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
           <h2 className="font-display text-lg font-semibold text-[#18181B]">
-            Competitors
+            {t.competitors}
           </h2>
 
           {data.competitors.length > 0 ? (
@@ -411,12 +431,12 @@ export function ReportScreen({
                       rel="noopener noreferrer"
                       className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
                     >
-                      <span>Source</span>
+                      <span>{t.source}</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   ) : (
                     <span className="shrink-0 text-xs text-[#787871]">
-                      Unverified source
+                      {t.unverifiedSource}
                     </span>
                   )}
                 </div>
@@ -424,14 +444,14 @@ export function ReportScreen({
             </div>
           ) : (
             <p className="mt-3 text-sm leading-relaxed text-[#575752]">
-              Could not verify competitors from live search sources. No unverified competitors were fabricated.
+              {t.noCompetitors}
             </p>
           )}
 
           {data.sources.length > 0 && (
             <div className="mt-6 border-t border-[#ECEBE6] pt-5">
               <h3 className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                Retrieved search sources
+                {t.retrievedSources}
               </h3>
               <ul className="mt-3 space-y-2">
                 {data.sources.map((src, idx) => (
@@ -457,13 +477,13 @@ export function ReportScreen({
           {/* Blueprint */}
           <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
             <h2 className="font-display text-lg font-semibold text-[#18181B]">
-              Blueprint
+              {t.blueprint}
             </h2>
 
             <dl className="mt-5 space-y-5">
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Problem
+                  {t.problem}
                 </dt>
                 <dd className="mt-1 text-sm leading-relaxed text-[#27272A]">
                   {data.blueprint.problem}
@@ -471,7 +491,7 @@ export function ReportScreen({
               </div>
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Target user
+                  {t.targetUser}
                 </dt>
                 <dd className="mt-1 text-sm leading-relaxed text-[#27272A]">
                   {data.blueprint.target_user}
@@ -479,7 +499,7 @@ export function ReportScreen({
               </div>
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Solution
+                  {t.solution}
                 </dt>
                 <dd className="mt-1 text-sm leading-relaxed text-[#27272A]">
                   {data.blueprint.solution}
@@ -487,7 +507,7 @@ export function ReportScreen({
               </div>
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Business model
+                  {t.businessModel}
                 </dt>
                 <dd className="mt-1 text-sm leading-relaxed text-[#27272A]">
                   {data.blueprint.business_model}
@@ -497,7 +517,7 @@ export function ReportScreen({
 
             <div className="mt-6 border-t border-[#ECEBE6] pt-5">
               <h3 className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                Key risks
+                {t.keyRisks}
               </h3>
               <ul className="mt-2.5 space-y-2 text-sm leading-relaxed text-[#27272A]">
                 {data.blueprint.key_risks.map((risk, idx) => (
@@ -514,7 +534,7 @@ export function ReportScreen({
 
             <div className="mt-6 border-t border-[#ECEBE6] pt-5">
               <h3 className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                Validate next
+                {t.validateNext}
               </h3>
               <ol className="mt-2.5 space-y-2 text-sm leading-relaxed text-[#27272A]">
                 {data.blueprint.validate_next.map((step, idx) => (
@@ -526,7 +546,7 @@ export function ReportScreen({
                     {!planDisabled &&
                       (trackedTitles.has(step.trim().toLowerCase()) ? (
                         <span className="shrink-0 text-xs text-[#787871]">
-                          In plan
+                          {t.inPlan}
                         </span>
                       ) : (
                         <button
@@ -534,7 +554,7 @@ export function ReportScreen({
                           onClick={() => onAddExperiments([step.trim()])}
                           className="shrink-0 cursor-pointer text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
                         >
-                          Add to plan
+                          {t.addToPlan}
                         </button>
                       ))}
                   </li>
@@ -546,13 +566,13 @@ export function ReportScreen({
           {/* Business Plan */}
           <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
             <h2 className="font-display text-lg font-semibold text-[#18181B]">
-              Business Plan
+              {t.businessPlan}
             </h2>
 
             <dl className="mt-5 space-y-5">
               <div>
                 <dt className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  <span>TAM</span>
+                  <span>{t.tam}</span>
                   <EstimateTag />
                 </dt>
                 <dd className="mt-1.5 text-sm leading-relaxed text-[#27272A]">
@@ -562,7 +582,7 @@ export function ReportScreen({
 
               <div>
                 <dt className="flex items-center gap-2 text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  <span>Pricing hypothesis</span>
+                  <span>{t.pricingHypothesis}</span>
                   <EstimateTag />
                 </dt>
                 <dd className="mt-1.5 text-sm leading-relaxed text-[#27272A]">
@@ -572,7 +592,7 @@ export function ReportScreen({
 
               <div>
                 <dt className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Go-to-market
+                  {t.goToMarket}
                 </dt>
                 <dd className="mt-1.5 text-sm leading-relaxed text-[#27272A]">
                   {data.business_plan.go_to_market}
@@ -583,7 +603,7 @@ export function ReportScreen({
             <div className="mt-6 border-t border-[#ECEBE6] pt-5">
               <div className="flex items-center gap-2">
                 <h3 className="text-xs font-semibold tracking-wide text-[#6B6B65] uppercase">
-                  Assumptions
+                  {t.assumptions}
                 </h3>
                 <EstimateTag />
               </div>
@@ -607,9 +627,10 @@ export function ReportScreen({
 }
 
 function EstimateTag() {
+  const { t } = useI18n();
   return (
     <span className="rounded border border-[#FDBA74] bg-[#FFF7ED] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#C2410C] uppercase">
-      ESTIMATE
+      {t.estimate}
     </span>
   );
 }

@@ -30,6 +30,14 @@ export function formatReportAsMarkdown(report: StoredForgeReport): string {
     `- Feasibility: ${data.idea_score.breakdown.feasibility}/10`,
     `- Differentiation: ${data.idea_score.breakdown.differentiation}/10`,
     "",
+    ...(data.decision
+      ? [
+          `## Decision: ${data.decision.call.toUpperCase()}`,
+          data.decision.reason,
+          ...data.decision.pivots.map((p) => `- ${p}`),
+          "",
+        ]
+      : []),
     "## What I Couldn't Verify",
     ...(data.grounding_flags.length > 0
       ? data.grounding_flags.map((f) => `- ${f}`)

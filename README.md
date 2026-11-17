@@ -1,9 +1,17 @@
 # FORGE
 
-Paste a messy startup idea, get one honest, grounded reality-check report:
-a 0–100 score with breakdown, SWOT, competitors backed by live search
-sources, a blueprint, a business-plan sketch, and an explicit list of what
-could not be verified.
+A founder operating system: test an idea, get a clear decision, and start
+executing this week. In English or Kiswahili.
+
+- **Validate.** Paste a messy idea and get an honest report: a 0–100 score
+  with breakdown, SWOT, competitors backed by live search sources, a
+  blueprint, a business-plan sketch, and a list of what could not be verified.
+- **Decide.** Every report ends in one call, Go, Pivot or Kill, with sharper
+  alternative ideas you can test in one click.
+- **Execute.** A 7-day launch sprint: small daily tasks with step-by-step
+  guidance and ready-to-copy messages and scripts, ticked off as you go.
+- **Remember.** A founder profile (skills, time, money, location, goal) that
+  every report and plan is tailored to.
 
 ## Run it
 
@@ -71,6 +79,12 @@ private to them.
 
 ## How it works
 
+- The founder profile (`profiles` table) and the UI language are sent with
+  every request; the model judges founder fit against the profile and writes
+  its output in the chosen language. UI strings live in `src/lib/i18n.tsx`.
+- `supabase/functions/_shared/sprint.ts` builds the 7-day sprint (request
+  body `mode: "sprint"`); the sprint and its ticked tasks are kept in the
+  `sprints` table, one per idea.
 - Each idea has a validation plan. A new idea's suggested tests become
   experiments; mark them done with a result and notes, and the next re-run
   sends those results to the model so the score reflects real evidence.
@@ -81,7 +95,8 @@ private to them.
   JSON report, streamed to the browser as server-sent events. `server.ts`
   (Node) and the edge function are thin hosts around it. Competitors are only kept if they point at a source the
   search actually returned.
-- `src/` — React + Tailwind UI: input, working, and report screens.
+- `src/` — React + Tailwind UI: sign-in, profile, input, working and report
+  screens (decision card and sprint panel included).
   `src/lib/store.ts` saves ideas to Supabase when configured, otherwise to
   the browser's `localStorage`.
 
