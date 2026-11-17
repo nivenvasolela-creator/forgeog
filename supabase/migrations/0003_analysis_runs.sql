@@ -12,10 +12,10 @@ create index analysis_runs_user_created_idx
 
 -- Row level security with no policies: signed-in users get no access at all.
 alter table public.analysis_runs enable row level security;
-revoke all on public.analysis_runs from anon, authenticated;
 
 -- Records one run for the user unless they already have p_max runs inside
--- the window. Returns whether the run is allowed.
+-- the window. Returns whether the run is allowed. Callable only with the
+-- service role key, which the edge function holds.
 create function public.record_analysis_run(
   p_user_id uuid,
   p_max integer,
@@ -28,11 +28,12 @@ as $$
 declare
   recent integer;
 begin
+  if coalesce(auth.role(), '') <> 'service_role' then
+    raise exception 'not allowed';
+  end if;
+
   -- Serialise concurrent calls for the same user so the count cannot be raced.
   perform pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0));
-
-  delete from public.analysis_runs
-    where user_id = p_user_id and created_at < now() - interval '1 day';
 
   select count(*) into recent
     from public.analysis_runs
@@ -47,8 +48,3 @@ begin
   return true;
 end;
 $$;
-
-revoke all on function public.record_analysis_run(uuid, integer, integer)
-  from public, anon, authenticated;
-grant execute on function public.record_analysis_run(uuid, integer, integer)
-  to service_role;
