@@ -1,4 +1,5 @@
-// Hosted FORGE API: GET returns health, POST runs an analysis and streams
+// Hosted FORGE API: GET returns health, POST runs an analysis or builds a
+// launch sprint (body.mode = "sprint") and streams
 // progress as server-sent events. Sign-in is always required here.
 import {
   DEFAULT_RATE_LIMIT_MAX,
@@ -6,9 +7,9 @@ import {
   recordRunInDatabase,
   verifyUser,
 } from "../_shared/access.ts";
-import { parseAnalyzeInput, runAnalysis } from "../_shared/analysis.ts";
 import { createLlm } from "../_shared/llm.ts";
 import { createSearch } from "../_shared/search.ts";
+import { prepareJob } from "../_shared/router.ts";
 
 const env = Deno.env.toObject();
 
@@ -79,8 +80,8 @@ Deno.serve(async (req: Request) => {
   } catch {
     return json({ error: "The request was not valid JSON." }, 400);
   }
-  const parsed = parseAnalyzeInput(body);
-  if (!parsed.ok) return json({ error: parsed.error }, 400);
+  const job = prepareJob(body);
+  if (!job.ok) return json({ error: job.error }, 400);
 
   const allowed = await recordRunInDatabase(
     SUPABASE_URL,
@@ -107,8 +108,7 @@ Deno.serve(async (req: Request) => {
       // Comment lines keep proxies from closing a quiet connection.
       keepAlive = setInterval(() => write(": keep-alive\n\n"), 15_000);
 
-      runAnalysis(
-        parsed.input,
+      job.run(
         { llm, search, isCancelled: () => cancelled },
         (event, data) =>
           write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)

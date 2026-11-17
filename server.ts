@@ -10,12 +10,9 @@ import {
   MESSAGES,
   verifyUser,
 } from "./supabase/functions/_shared/access.ts";
-import {
-  parseAnalyzeInput,
-  runAnalysis,
-} from "./supabase/functions/_shared/analysis.ts";
 import { createLlm } from "./supabase/functions/_shared/llm.ts";
 import { createSearch } from "./supabase/functions/_shared/search.ts";
+import { prepareJob } from "./supabase/functions/_shared/router.ts";
 
 const PORT = Number(process.env.PORT) || 3000;
 const llm = createLlm(process.env);
@@ -49,9 +46,9 @@ async function startServer(): Promise<void> {
   });
 
   app.post("/api/analyze", async (req: Request, res: Response) => {
-    const parsed = parseAnalyzeInput(req.body);
-    if (!parsed.ok) {
-      res.status(400).json({ error: parsed.error });
+    const job = prepareJob(req.body);
+    if (!job.ok) {
+      res.status(400).json({ error: job.error });
       return;
     }
 
@@ -90,8 +87,7 @@ async function startServer(): Promise<void> {
     res.setHeader("Connection", "keep-alive");
     res.flushHeaders();
 
-    await runAnalysis(
-      parsed.input,
+    await job.run(
       { llm, search, isCancelled: () => clientDisconnected },
       (event, data) => {
         if (res.writableEnded) return;

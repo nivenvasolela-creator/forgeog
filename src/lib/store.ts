@@ -4,6 +4,7 @@ import type {
   ForgeReportData,
   Idea,
   IdeaVersion,
+  Sprint,
 } from "./analyzeIdea";
 
 export interface NewVersionInput {
@@ -26,6 +27,8 @@ export interface IdeaStore {
     patch: ExperimentPatch
   ): Promise<void>;
   deleteExperiment(ideaId: string, experimentId: string): Promise<void>;
+  /** Stores the idea's sprint, replacing any earlier one. */
+  saveSprint(ideaId: string, sprint: Sprint): Promise<void>;
 }
 
 export type ExperimentPatch = Partial<
@@ -63,6 +66,7 @@ function readLocalIdeas(): Idea[] {
       return (parsed as Idea[]).map((i) => ({
         ...i,
         experiments: i.experiments ?? [],
+        sprint: i.sprint ?? null,
       }));
     }
     // First run after the workspace upgrade: turn each old saved report into an idea.
@@ -79,6 +83,7 @@ function readLocalIdeas(): Idea[] {
         updatedAt: r.createdAt,
         versions: [r],
         experiments: [],
+        sprint: null,
       }));
     writeLocalIdeas(migrated);
     return migrated;
@@ -131,6 +136,7 @@ export function createLocalStore(): IdeaStore {
             updatedAt: now,
             versions: [version],
             experiments: [],
+            sprint: null,
           };
       const next = [idea, ...ideas.filter((i) => i.id !== idea.id)].slice(
         0,
@@ -178,6 +184,9 @@ export function createLocalStore(): IdeaStore {
         experiments: idea.experiments.filter((e) => e.id !== experimentId),
       }));
     },
+    async saveSprint(ideaId, sprint) {
+      updateLocalIdea(ideaId, (idea) => ({ ...idea, sprint }));
+    },
   };
 }
 
@@ -222,6 +231,23 @@ interface IdeaRow {
   updated_at: string;
   reports: ReportRow[] | null;
   experiments: ExperimentRow[] | null;
+  sprints: SprintRow[] | SprintRow | null;
+}
+
+interface SprintRow {
+  data: { plan?: Sprint["plan"]; done?: string[] } | null;
+  created_at: string;
+}
+
+function toSprint(rows: IdeaRow["sprints"]): Sprint | null {
+  // One-to-one relations come back as an object; older clients may see a list.
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row?.data?.plan) return null;
+  return {
+    plan: row.data.plan,
+    done: Array.isArray(row.data.done) ? row.data.done : [],
+    createdAt: row.created_at,
+  };
 }
 
 function toVersion(row: ReportRow): IdeaVersion {
@@ -246,12 +272,13 @@ function toIdea(row: IdeaRow): Idea {
     experiments: (row.experiments ?? [])
       .map(toExperiment)
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    sprint: toSprint(row.sprints),
   };
 }
 
 const EXPERIMENT_SELECT =
   "id, title, status, outcome, notes, created_at, updated_at";
-const IDEA_SELECT = `id, title, created_at, updated_at, reports (id, created_at, raw_idea, clarification, data), experiments (${EXPERIMENT_SELECT})`;
+const IDEA_SELECT = `id, title, created_at, updated_at, reports (id, created_at, raw_idea, clarification, data), experiments (${EXPERIMENT_SELECT}), sprints (data, created_at)`;
 
 export function createSupabaseStore(sb: SupabaseClient): IdeaStore {
   const fetchIdea = async (ideaId: string): Promise<Idea> => {
@@ -327,6 +354,18 @@ export function createSupabaseStore(sb: SupabaseClient): IdeaStore {
         .from("experiments")
         .delete()
         .eq("id", experimentId);
+      if (error) throw new Error(error.message);
+    },
+    async saveSprint(ideaId, sprint) {
+      const { error } = await sb.from("sprints").upsert(
+        {
+          idea_id: ideaId,
+          data: { plan: sprint.plan, done: sprint.done },
+          created_at: sprint.createdAt,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "idea_id" }
+      );
       if (error) throw new Error(error.message);
     },
   };

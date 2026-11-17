@@ -1,24 +1,17 @@
 import { Check, Loader2 } from "lucide-react";
 import { STRESS_TEST_PHASES } from "../lib/analyzeIdea";
+import { useI18n } from "../lib/i18n";
 
 interface WorkingScreenProps {
   activePhaseIndex: number;
   ideaPreview: string;
 }
 
-const PHASE_NOTES: Record<string, string> = {
-  Problem: "Checking problem specificity and pain intensity",
-  Customer: "Evaluating target buyer and willingness to pay",
-  Market: "Scanning live web sources for market signals",
-  Competition: "Verifying existing alternatives and pricing",
-  "Business Model": "Testing unit economics and revenue assumptions",
-  "Execution Risk": "Compiling failure modes and validation steps",
-};
-
 export function WorkingScreen({
   activePhaseIndex,
   ideaPreview,
 }: WorkingScreenProps) {
+  const { t } = useI18n();
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6 sm:py-20">
       <header className="mb-8">
@@ -26,7 +19,7 @@ export function WorkingScreen({
           FORGE
         </span>
         <h1 className="mt-3 font-display text-2xl font-semibold tracking-tight text-[#18181B] sm:text-3xl">
-          Stress-testing your idea
+          {t.stressTesting}
         </h1>
         <p className="mt-2 truncate text-sm text-[#6B6B65]">{ideaPreview}</p>
       </header>
@@ -69,15 +62,15 @@ export function WorkingScreen({
                           : "text-[#9B9B94]"
                       }`}
                     >
-                      {phase}
+                      {t.phaseNames[index] ?? phase}
                     </span>
                     <span className="font-mono text-xs tabular-nums text-[#787871]">
-                      {isComplete ? "Done" : isActive ? "Running" : "Queued"}
+                      {isComplete ? t.phaseDone : isActive ? t.phaseRunning : t.phaseQueued}
                     </span>
                   </div>
                   {(isActive || isComplete) && (
                     <p className="mt-1 text-sm text-[#6B6B65]">
-                      {PHASE_NOTES[phase]}
+                      {t.phaseNotes[index]}
                     </p>
                   )}
                 </div>

@@ -2,15 +2,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./components/AuthScreen";
 import { InputScreen } from "./components/InputScreen";
+import { ProfileScreen } from "./components/ProfileScreen";
 import { ReportScreen } from "./components/ReportScreen";
 import { WorkingScreen } from "./components/WorkingScreen";
 import {
   analyzeIdea,
+  buildSprintPlan,
   completedEvidence,
   STRESS_TEST_PHASES,
   type Experiment,
   type Idea,
+  type Sprint,
 } from "./lib/analyzeIdea";
+import { useI18n } from "./lib/i18n";
+import {
+  createLocalProfileStore,
+  createSupabaseProfileStore,
+  emptyProfile,
+  profileHasSubstance,
+  type FounderProfile,
+} from "./lib/profile";
 import {
   createLocalStore,
   createSupabaseStore,
@@ -19,7 +30,26 @@ import {
 } from "./lib/store";
 import { supabase } from "./lib/supabase";
 
-type FlowScreen = "home" | "working" | "idea";
+type FlowScreen = "home" | "working" | "idea" | "profile";
+
+const PROFILE_SKIPPED_KEY = "forge_profile_skipped_v1";
+
+function profileSkipped(): boolean {
+  try {
+    return window.localStorage.getItem(PROFILE_SKIPPED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function errorText(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+/** True when the model provider refused because a daily or rate quota ran out. */
+function isQuotaError(message: string): boolean {
+  return /free-models-per-day|rate limit|quota/i.test(message);
+}
 
 const ACTIVE_IDEA_KEY = "forge_active_idea_v2";
 const UNSAVED_IDEA_ID = "unsaved";
@@ -42,6 +72,7 @@ function recallActiveIdea(): string | null {
 }
 
 export default function App() {
+  const { t, lang, setLang } = useI18n();
   // Sign-in only exists when Supabase is configured.
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(!supabase);
@@ -62,6 +93,18 @@ export default function App() {
   const store = useMemo(
     () => (supabase ? createSupabaseStore(supabase) : createLocalStore()),
     []
+  );
+
+  const profileStore = useMemo(
+    () => (supabase ? createSupabaseProfileStore(supabase) : createLocalProfileStore()),
+    []
+  );
+  const [profile, setProfile] = useState<FounderProfile | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  const [sprintBuildingFor, setSprintBuildingFor] = useState<string | null>(null);
+  const [sprintError, setSprintError] = useState<{ ideaId: string; message: string } | null>(
+    null
   );
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
@@ -117,11 +160,7 @@ export default function App() {
       })
       .catch((err) => {
         if (cancelled) return;
-        setErrorMessage(
-          `Could not load your saved ideas (${
-            err instanceof Error ? err.message : "unknown error"
-          }).`
-        );
+        setErrorMessage(t.loadIdeasFailed(errorText(err, t.unknownError)));
       })
       .finally(() => {
         if (!cancelled) setIdeasLoading(false);
@@ -129,7 +168,47 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+    // t only shapes the error text; reloading on a language switch is not wanted.
   }, [authReady, userId, store, resetDraft]);
+
+  // Load what FORGE remembers about the founder; first-timers see onboarding.
+  useEffect(() => {
+    if (!authReady) return;
+    if (supabase && !userId) {
+      setProfile(null);
+      setProfileLoaded(false);
+      return;
+    }
+    let cancelled = false;
+    profileStore
+      .load()
+      .then((loaded) => {
+        if (cancelled) return;
+        setProfile(loaded);
+        if (loaded) setLang(loaded.language);
+        else if (!profileSkipped()) setScreen("profile");
+      })
+      .catch(() => {
+        // Without a profile FORGE still works; it just knows less.
+      })
+      .finally(() => {
+        if (!cancelled) setProfileLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // setLang is stable; lang is deliberately not a dependency.
+  }, [authReady, userId, profileStore, setLang]);
+
+  // Keep the saved profile's language in step with the toggle.
+  useEffect(() => {
+    if (!profile || profile.language === lang) return;
+    const next = { ...profile, language: lang };
+    setProfile(next);
+    profileStore.save(next).catch(() => {
+      // Not critical: the toggle still applies in this browser.
+    });
+  }, [lang, profile, profileStore]);
 
   // Smoothly step the 6 stress-test phases in order on the working screen
   useEffect(() => {
@@ -149,14 +228,12 @@ export default function App() {
   const runAnalysis = async (ideaText: string, clarificationText?: string) => {
     const trimmedIdea = ideaText.trim();
     if (!trimmedIdea) {
-      setErrorMessage(
-        "Enter your startup idea first so there is something to test."
-      );
+      setErrorMessage(t.enterIdeaFirst);
       return;
     }
 
     if (clarifyingQuestion && !clarificationText?.trim()) {
-      setErrorMessage("Answer the clarifying question so FORGE can judge the idea.");
+      setErrorMessage(t.answerClarifying);
       return;
     }
 
@@ -180,6 +257,8 @@ export default function App() {
         clarification: clarificationText?.trim() || undefined,
         evidence: revising ? completedEvidence(revising.experiments) : undefined,
         accessToken,
+        profile,
+        language: lang,
         onPhase: (phaseIndex) => {
           if (phaseIndex > targetPhaseRef.current) {
             targetPhaseRef.current = phaseIndex;
@@ -233,12 +312,9 @@ export default function App() {
           updatedAt: now,
           versions: [{ id: UNSAVED_IDEA_ID, createdAt: now, ...input }],
           experiments: [],
+          sprint: null,
         };
-        setSaveWarning(
-          `This report could not be saved (${
-            saveErr instanceof Error ? saveErr.message : "unknown error"
-          }). Copy it as Markdown before leaving this page.`
-        );
+        setSaveWarning(t.reportNotSaved(errorText(saveErr, t.unknownError)));
       }
 
       setIdeas((prev) => [saved, ...prev.filter((i) => i.id !== saved.id)]);
@@ -248,11 +324,8 @@ export default function App() {
       resetDraft();
       setScreen("idea");
     } catch (err) {
-      const msg =
-        err instanceof Error && err.message
-          ? err.message
-          : "Analysis failed unexpectedly. Please try again.";
-      setErrorMessage(msg);
+      const message = errorText(err, t.analysisFailed);
+      setErrorMessage(isQuotaError(message) ? t.aiLimitReached : message);
       setScreen("home");
     }
   };
@@ -297,12 +370,85 @@ export default function App() {
     goHome();
   };
 
+  /** Starts a fresh idea pre-filled with a suggested pivot. */
+  const handleTestIdea = (text: string) => {
+    resetDraft();
+    setRawIdea(text);
+    goHome();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const setIdeaSprint = (ideaId: string, sprint: Sprint) => {
+    setIdeas((prev) => prev.map((i) => (i.id === ideaId ? { ...i, sprint } : i)));
+  };
+
+  const handleBuildSprint = async (idea: Idea) => {
+    if (sprintBuildingFor) return;
+    setSprintBuildingFor(idea.id);
+    setSprintError(null);
+    try {
+      let accessToken: string | undefined;
+      if (supabase) {
+        const { data } = await supabase.auth.getSession();
+        accessToken = data.session?.access_token;
+      }
+      const plan = await buildSprintPlan(idea, { accessToken, profile, language: lang });
+      const sprint: Sprint = { plan, done: [], createdAt: new Date().toISOString() };
+      setIdeaSprint(idea.id, sprint);
+      try {
+        await store.saveSprint(idea.id, sprint);
+      } catch (err) {
+        setSprintError({
+          ideaId: idea.id,
+          message: t.sprintSaveFailed(errorText(err, t.unknownError)),
+        });
+      }
+    } catch (err) {
+      const message = errorText(err, t.unknownError);
+      setSprintError({
+        ideaId: idea.id,
+        message: isQuotaError(message) ? t.aiLimitReached : t.sprintFailed(message),
+      });
+    } finally {
+      setSprintBuildingFor(null);
+    }
+  };
+
+  // Tick or untick a task: update the screen first, then save.
+  const handleToggleSprintTask = (idea: Idea, key: string) => {
+    if (!idea.sprint) return;
+    const done = idea.sprint.done.includes(key)
+      ? idea.sprint.done.filter((k) => k !== key)
+      : [...idea.sprint.done, key];
+    const next = { ...idea.sprint, done };
+    setIdeaSprint(idea.id, next);
+    store.saveSprint(idea.id, next).catch((err) =>
+      setSprintError({
+        ideaId: idea.id,
+        message: t.sprintSaveFailed(errorText(err, t.unknownError)),
+      })
+    );
+  };
+
+  const handleSaveProfile = async (next: FounderProfile) => {
+    await profileStore.save(next);
+    setProfile(next);
+    setScreen(activeIdeaId ? "idea" : "home");
+  };
+
+  const handleLeaveProfile = () => {
+    if (!profile) {
+      try {
+        window.localStorage.setItem(PROFILE_SKIPPED_KEY, "1");
+      } catch {
+        // Onboarding may show again next visit; harmless.
+      }
+    }
+    setScreen(activeIdeaId ? "idea" : "home");
+  };
+
   const handleDeleteIdea = async (idea: Idea) => {
-    if (
-      !window.confirm(
-        `Delete "${idea.title}" and all ${idea.versions.length} of its reports? This cannot be undone.`
-      )
-    ) {
+    if (!window.confirm(t.deleteConfirm(idea.title, idea.versions.length))) {
       return;
     }
     try {
@@ -311,11 +457,7 @@ export default function App() {
       if (revisingIdeaId === idea.id) resetDraft();
       goHome();
     } catch (err) {
-      setSaveWarning(
-        `Could not delete this idea (${
-          err instanceof Error ? err.message : "unknown error"
-        }).`
-      );
+      setSaveWarning(t.deleteFailed(errorText(err, t.unknownError)));
     }
   };
 
@@ -331,11 +473,7 @@ export default function App() {
   };
 
   const reportPlanError = (err: unknown) => {
-    setSaveWarning(
-      `That change to the validation plan was not saved (${
-        err instanceof Error ? err.message : "unknown error"
-      }). Reload to see what is stored.`
-    );
+    setSaveWarning(t.planSaveFailed(errorText(err, t.unknownError)));
   };
 
   const handleAddExperiments = async (ideaId: string, titles: string[]) => {
@@ -367,13 +505,26 @@ export default function App() {
   };
 
   if (!authReady) {
-    return (
-      <p className="px-4 py-16 text-center text-sm text-[#6B6B65]">Loading...</p>
-    );
+    return <p className="px-4 py-16 text-center text-sm text-[#6B6B65]">{t.loading}</p>;
   }
 
   if (supabase && !session) {
     return <AuthScreen supabase={supabase} />;
+  }
+
+  if (!profileLoaded) {
+    return <p className="px-4 py-16 text-center text-sm text-[#6B6B65]">{t.loading}</p>;
+  }
+
+  if (screen === "profile") {
+    return (
+      <ProfileScreen
+        initial={profile ?? emptyProfile(lang)}
+        isOnboarding={!profile}
+        onSave={handleSaveProfile}
+        onLeave={handleLeaveProfile}
+      />
+    );
   }
 
   if (screen === "working") {
@@ -406,6 +557,12 @@ export default function App() {
           handleUpdateExperiment(activeIdea.id, id, patch)
         }
         onDeleteExperiment={(id) => handleDeleteExperiment(activeIdea.id, id)}
+        onTestIdea={handleTestIdea}
+        sprintBuilding={sprintBuildingFor === activeIdea.id}
+        sprintError={sprintError?.ideaId === activeIdea.id ? sprintError.message : null}
+        showProfileTip={!profileHasSubstance(profile)}
+        onBuildSprint={() => void handleBuildSprint(activeIdea)}
+        onToggleSprintTask={(key) => handleToggleSprintTask(activeIdea, key)}
       />
     );
   }
@@ -445,6 +602,8 @@ export default function App() {
       onSelectIdea={handleSelectIdea}
       userEmail={session?.user.email ?? null}
       onSignOut={signOut}
+      onOpenProfile={() => setScreen("profile")}
+      showProfileNudge={!profileHasSubstance(profile)}
     />
   );
 }

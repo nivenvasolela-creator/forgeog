@@ -2,6 +2,13 @@
 // so the same file runs in the Node server and in the Supabase Edge Function.
 import type { Llm, SchemaNode } from "./llm.ts";
 import type { SearchHit, WebSearch } from "./search.ts";
+import {
+  languageRule,
+  parseLanguage,
+  parseProfile,
+  profileBlock,
+  type Language,
+} from "./founder.ts";
 
 const MAX_IDEA_CHARS = 6000;
 const MAX_CLARIFICATION_CHARS = 2000;
@@ -93,9 +100,14 @@ interface RawReport {
   };
   grounding_flags: string[];
   sources: VerifiedSource[];
+  decision: {
+    call: "go" | "pivot" | "kill";
+    reason: string;
+    pivots: string[];
+  };
 }
 
-function isFatalApiError(err: unknown): boolean {
+export function isFatalApiError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   const status =
     typeof err === "object" && err !== null && "status" in err
@@ -125,7 +137,7 @@ function isTransientError(err: unknown): boolean {
   );
 }
 
-async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 4): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -174,11 +186,11 @@ export function formatApiError(err: unknown, llm: Llm): string {
 }
 
 // Open models do not always honour the schema, so never trust a field's type.
-function str(value: unknown): string {
+export function str(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function strList(value: unknown): string[] {
+export function strList(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map(str).filter(Boolean);
 }
@@ -325,6 +337,29 @@ const REPORT_SCHEMA: SchemaNode = {
         "pricing_hypothesis",
       ],
     },
+    decision: {
+      type: "OBJECT",
+      properties: {
+        call: {
+          type: "STRING",
+          enum: ["go", "pivot", "kill"],
+          description:
+            "go: worth starting to execute now. pivot: the core insight is useful but this version should change. kill: stop and move on to another idea.",
+        },
+        reason: {
+          type: "STRING",
+          description:
+            "Two or three plain sentences explaining the call, written to the founder.",
+        },
+        pivots: {
+          type: "ARRAY",
+          items: { type: "STRING" },
+          description:
+            "For pivot or kill: 2-3 sharper alternative ideas, each one self-contained sentence naming the customer, the problem and how it makes money. For go: an empty array.",
+        },
+      },
+      required: ["call", "reason", "pivots"],
+    },
     grounding_flags: {
       type: "ARRAY",
       items: { type: "STRING" },
@@ -351,6 +386,7 @@ const REPORT_SCHEMA: SchemaNode = {
     "competitors",
     "blueprint",
     "business_plan",
+    "decision",
     "grounding_flags",
     "sources",
   ],
@@ -426,6 +462,8 @@ export interface AnalyzeInput {
   rawIdea: string;
   clarification: string;
   evidenceLines: string[];
+  profileLines: string[];
+  language: Language;
 }
 
 /** Validates a request body. Returns the cleaned input or a message for the user. */
@@ -444,7 +482,16 @@ export function parseAnalyzeInput(
       error: `That is too long to analyze. Keep the idea under ${MAX_IDEA_CHARS} characters.`,
     };
   }
-  return { ok: true, input: { rawIdea, clarification, evidenceLines: parseEvidence(record.evidence) } };
+  return {
+    ok: true,
+    input: {
+      rawIdea,
+      clarification,
+      evidenceLines: parseEvidence(record.evidence),
+      profileLines: parseProfile(record.profile),
+      language: parseLanguage(record.language),
+    },
+  };
 }
 
 export type Emit = (event: string, data: unknown) => void;
@@ -467,7 +514,8 @@ export async function runAnalysis(
   emit: Emit
 ): Promise<void> {
   const { llm } = deps;
-  const { rawIdea, clarification, evidenceLines } = input;
+  const { rawIdea, clarification, evidenceLines, profileLines, language } = input;
+  const langRule = languageRule(language);
   try {
   // Phase 1: Problem — check if a single clarifying question is needed (only on initial submission)
   emit("phase", { phaseIndex: 0, phaseName: "Problem" });
@@ -476,7 +524,7 @@ export async function runAnalysis(
     const clarity = (await withRetry(() =>
       llm.generateJson({
         system:
-          "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question.",
+          "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question." + langRule,
         prompt: `Evaluate whether this startup idea has enough substance to judge, or if it is too vague (missing a clear user, concrete problem, AND plausible way to make money).\n\nFounder input:\n"""\n${rawIdea}\n"""`,
         schema: CLARITY_SCHEMA,
         schemaName: "clarity_check",
@@ -513,7 +561,15 @@ export async function runAnalysis(
   const research = llm.research;
   try {
     if (deps.search) {
-      const hits = await searchTheWeb(deps.search, llm, combinedIdeaContext);
+      // Location steers the queries towards the founder's own market.
+      const location = profileLines.filter((l) => /^- (Country|City):/.test(l));
+      const hits = await searchTheWeb(
+        deps.search,
+        llm,
+        location.length > 0
+          ? `${combinedIdeaContext}\n\nFounder is based in:\n${location.join("\n")}`
+          : combinedIdeaContext
+      );
       for (const hit of hits) {
         verifiedSources.push({ title: hit.title, url: hit.url });
       }
@@ -601,12 +657,17 @@ ${sourcesBlock}
 EXPERIMENTS THE FOUNDER REPORTS HAVING RUN (self-reported, not independently verified):
 ${evidenceLines.length > 0 ? evidenceLines.join("\n") : "None reported."}
 
+FOUNDER PROFILE (self-reported by the founder):
+${profileBlock(profileLines)}
+
 PRE-EXISTING GROUNDING FLAGS:
 ${preGroundingFlags.length > 0 ? preGroundingFlags.join("\n") : "None"}
 
 RULES:
 - Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
-- Notice founder_fit: if the founder gave no background/credentials in their input, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
+- founder_fit: judge it against the FOUNDER PROFILE (skills, background, time, money, location) and anything the founder wrote about themselves. If neither says anything about the founder, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
+- Tailor go_to_market, pricing and validate_next to the founder's country, city, budget and time when the profile gives them. A founder with little money needs steps that cost little or nothing.
+- decision: make one clear call. Use "go" only when the idea is worth executing now (roughly overall >= 60 with no fatal flaw). Use "kill" when the core problem or market looks fundamentally weak. Otherwise "pivot". For pivot or kill, give 2-3 concrete alternative ideas built on what is strongest here; for go, give an empty pivots array.
 - Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
 - Founder experiments: treat reported results as real but self-reported evidence. A result that went against the idea must lower the relevant scores and appear in weaknesses or key_risks. A supporting result only raises scores as far as its notes give specifics (who, how many, what they did or paid); vague or missing notes earn little. Say in the rationale which results moved the score. Add one grounding_flags entry stating that experiment results are self-reported. Do not repeat a finished experiment in validate_next; suggest what to test next instead.
 - Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
@@ -614,7 +675,7 @@ RULES:
 
   const parsed = (await withRetry(() =>
     llm.generateJson({
-      system: ANALYSIS_SYSTEM_INSTRUCTION,
+      system: ANALYSIS_SYSTEM_INSTRUCTION + langRule,
       prompt: analysisPrompt,
       schema: REPORT_SCHEMA,
       schemaName: "forge_report",
@@ -671,11 +732,12 @@ RULES:
     finalFlags.add("Could not verify competitors");
   }
 
+  const overallScore = Math.round(clamp(parsed.idea_score?.overall ?? 0, 0, 100));
   const report = {
     idea_title: str(parsed.idea_title).slice(0, 80),
     idea_summary: str(parsed.idea_summary),
     idea_score: {
-      overall: Math.round(clamp(parsed.idea_score?.overall ?? 0, 0, 100)),
+      overall: overallScore,
       breakdown: {
         problem_clarity: Number(
           clamp(parsed.idea_score?.breakdown?.problem_clarity ?? 0, 0, 10).toFixed(1)
@@ -718,6 +780,13 @@ RULES:
       assumptions: strList(parsed.business_plan?.assumptions),
       go_to_market: str(parsed.business_plan?.go_to_market),
       pricing_hypothesis: str(parsed.business_plan?.pricing_hypothesis),
+    },
+    decision: {
+      call: (["go", "pivot", "kill"] as const).find(
+        (c) => c === parsed.decision?.call
+      ) ?? (overallScore >= 60 ? "go" : overallScore >= 30 ? "pivot" : "kill"),
+      reason: str(parsed.decision?.reason),
+      pivots: strList(parsed.decision?.pivots).slice(0, 3),
     },
     grounding_flags: Array.from(finalFlags),
     sources: verifiedSources,
