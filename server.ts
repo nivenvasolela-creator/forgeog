@@ -23,6 +23,30 @@ const supabaseAuth =
 
 const MAX_IDEA_CHARS = 6000;
 const MAX_CLARIFICATION_CHARS = 2000;
+const MAX_EVIDENCE_ITEMS = 25;
+const EVIDENCE_OUTCOMES: Record<string, string> = {
+  supported: "SUPPORTED the idea",
+  refuted: "WENT AGAINST the idea",
+  inconclusive: "INCONCLUSIVE",
+};
+
+/** Finished experiments sent by the client, cleaned and capped. */
+function parseEvidence(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const lines: string[] = [];
+  for (const item of input.slice(0, MAX_EVIDENCE_ITEMS)) {
+    if (typeof item !== "object" || item === null) continue;
+    const { title, outcome, notes } = item as Record<string, unknown>;
+    const label = typeof outcome === "string" ? EVIDENCE_OUTCOMES[outcome] : undefined;
+    if (typeof title !== "string" || !title.trim() || !label) continue;
+    const cleanNotes =
+      typeof notes === "string" ? notes.trim().slice(0, 1000) : "";
+    lines.push(
+      `- Experiment: ${title.trim().slice(0, 300)}\n  Result: ${label}\n  Founder's notes: ${cleanNotes || "(none given)"}`
+    );
+  }
+  return lines;
+}
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = Number(process.env.RATE_LIMIT_MAX) || 10;
 
@@ -408,6 +432,8 @@ async function startServer(): Promise<void> {
         ? req.body.clarification.trim()
         : "";
 
+    const evidenceLines = parseEvidence(req.body?.evidence);
+
     if (!rawIdea) {
       res.status(400).json({
         error: "Enter your startup idea first so there is something to test.",
@@ -432,6 +458,13 @@ async function startServer(): Promise<void> {
       const { data, error } = token
         ? await supabaseAuth.auth.getUser(token)
         : { data: { user: null }, error: null };
+      // No HTTP status means Supabase could not be reached, not a bad session.
+      if (error && !error.status) {
+        res.status(503).json({
+          error: "Could not reach the sign-in service to check your session. Try again in a moment.",
+        });
+        return;
+      }
       if (error || !data.user) {
         res.status(401).json({
           error: "Your session has expired. Sign in again to run an analysis.",
@@ -597,6 +630,9 @@ ${researchNotes || "No grounded research notes were retrieved."}
 VERIFIED SOURCES FROM GOOGLE SEARCH (numbered):
 ${sourcesBlock}
 
+EXPERIMENTS THE FOUNDER REPORTS HAVING RUN (self-reported, not independently verified):
+${evidenceLines.length > 0 ? evidenceLines.join("\n") : "None reported."}
+
 PRE-EXISTING GROUNDING FLAGS:
 ${preGroundingFlags.length > 0 ? preGroundingFlags.join("\n") : "None"}
 
@@ -604,6 +640,7 @@ RULES:
 - Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
 - Notice founder_fit: if the founder gave no background/credentials in their input, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
 - Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
+- Founder experiments: treat reported results as real but self-reported evidence. A result that went against the idea must lower the relevant scores and appear in weaknesses or key_risks. A supporting result only raises scores as far as its notes give specifics (who, how many, what they did or paid); vague or missing notes earn little. Say in the rationale which results moved the score. Add one grounding_flags entry stating that experiment results are self-reported. Do not repeat a finished experiment in validate_next; suggest what to test next instead.
 - Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
 - grounding_flags: list every important claim, competitor figure, market size, or assumption that could not be verified from the retrieved sources.`;
 

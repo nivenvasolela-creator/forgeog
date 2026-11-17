@@ -4,11 +4,18 @@ import { AuthScreen } from "./components/AuthScreen";
 import { InputScreen } from "./components/InputScreen";
 import { ReportScreen } from "./components/ReportScreen";
 import { WorkingScreen } from "./components/WorkingScreen";
-import { analyzeIdea, STRESS_TEST_PHASES, type Idea } from "./lib/analyzeIdea";
+import {
+  analyzeIdea,
+  completedEvidence,
+  STRESS_TEST_PHASES,
+  type Experiment,
+  type Idea,
+} from "./lib/analyzeIdea";
 import {
   createLocalStore,
   createSupabaseStore,
   deriveTitle,
+  type ExperimentPatch,
 } from "./lib/store";
 import { supabase } from "./lib/supabase";
 
@@ -167,8 +174,11 @@ export default function App() {
         accessToken = data.session?.access_token;
       }
 
+      const revising = ideas.find((i) => i.id === revisingIdeaId);
+
       const result = await analyzeIdea(trimmedIdea, {
         clarification: clarificationText?.trim() || undefined,
+        evidence: revising ? completedEvidence(revising.experiments) : undefined,
         accessToken,
         onPhase: (phaseIndex) => {
           if (phaseIndex > targetPhaseRef.current) {
@@ -199,6 +209,20 @@ export default function App() {
       let saved: Idea;
       try {
         saved = await store.addVersion(revisingIdeaId, input);
+        // A brand-new idea starts with the report's suggested tests as its plan.
+        const suggested = result.report.blueprint.validate_next
+          .map((t) => t.trim())
+          .filter(Boolean);
+        if (!revisingIdeaId && suggested.length > 0) {
+          try {
+            saved = {
+              ...saved,
+              experiments: await store.addExperiments(saved.id, suggested),
+            };
+          } catch {
+            // The report is saved; the founder can still track items by hand.
+          }
+        }
       } catch (saveErr) {
         // The analysis already ran; show it even though it could not be stored.
         const now = new Date().toISOString();
@@ -208,6 +232,7 @@ export default function App() {
           createdAt: now,
           updatedAt: now,
           versions: [{ id: UNSAVED_IDEA_ID, createdAt: now, ...input }],
+          experiments: [],
         };
         setSaveWarning(
           `This report could not be saved (${
@@ -294,6 +319,53 @@ export default function App() {
     }
   };
 
+  const changeExperiments = (
+    ideaId: string,
+    change: (experiments: Experiment[]) => Experiment[]
+  ) => {
+    setIdeas((prev) =>
+      prev.map((i) =>
+        i.id === ideaId ? { ...i, experiments: change(i.experiments) } : i
+      )
+    );
+  };
+
+  const reportPlanError = (err: unknown) => {
+    setSaveWarning(
+      `That change to the validation plan was not saved (${
+        err instanceof Error ? err.message : "unknown error"
+      }). Reload to see what is stored.`
+    );
+  };
+
+  const handleAddExperiments = async (ideaId: string, titles: string[]) => {
+    try {
+      const added = await store.addExperiments(ideaId, titles);
+      changeExperiments(ideaId, (list) => [...list, ...added]);
+    } catch (err) {
+      reportPlanError(err);
+    }
+  };
+
+  // Update the screen first so typing and toggling feel instant, then save.
+  const handleUpdateExperiment = (
+    ideaId: string,
+    experimentId: string,
+    patch: ExperimentPatch
+  ) => {
+    changeExperiments(ideaId, (list) =>
+      list.map((e) => (e.id === experimentId ? { ...e, ...patch } : e))
+    );
+    store.updateExperiment(ideaId, experimentId, patch).catch(reportPlanError);
+  };
+
+  const handleDeleteExperiment = (ideaId: string, experimentId: string) => {
+    changeExperiments(ideaId, (list) =>
+      list.filter((e) => e.id !== experimentId)
+    );
+    store.deleteExperiment(ideaId, experimentId).catch(reportPlanError);
+  };
+
   if (!authReady) {
     return (
       <p className="px-4 py-16 text-center text-sm text-[#6B6B65]">Loading...</p>
@@ -326,6 +398,14 @@ export default function App() {
         onNewIdea={handleNewIdea}
         onRevise={() => handleRevise(activeIdea)}
         onDelete={() => void handleDeleteIdea(activeIdea)}
+        planDisabled={activeIdea.id === UNSAVED_IDEA_ID}
+        onAddExperiments={(titles) =>
+          void handleAddExperiments(activeIdea.id, titles)
+        }
+        onUpdateExperiment={(id, patch) =>
+          handleUpdateExperiment(activeIdea.id, id, patch)
+        }
+        onDeleteExperiment={(id) => handleDeleteExperiment(activeIdea.id, id)}
       />
     );
   }
@@ -356,6 +436,9 @@ export default function App() {
         setErrorMessage(null);
       }}
       revisingTitle={revisingIdea?.title ?? null}
+      revisingEvidenceCount={
+        revisingIdea ? completedEvidence(revisingIdea.experiments).length : 0
+      }
       onCancelRevise={resetDraft}
       ideas={ideas.filter((i) => i.id !== UNSAVED_IDEA_ID)}
       ideasLoading={ideasLoading}

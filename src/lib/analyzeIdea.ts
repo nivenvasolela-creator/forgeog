@@ -72,13 +72,46 @@ export interface StoredForgeReport {
 /** One analysis run of an idea. */
 export type IdeaVersion = StoredForgeReport;
 
-/** A workspace: one idea and every report run against it, newest first. */
+export type ExperimentStatus = "todo" | "running" | "done";
+export type ExperimentOutcome = "supported" | "refuted" | "inconclusive";
+
+/** One thing the founder is doing to test the idea in the real world. */
+export interface Experiment {
+  id: string;
+  title: string;
+  status: ExperimentStatus;
+  /** Only meaningful once status is "done". */
+  outcome: ExperimentOutcome | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A finished experiment, sent with a re-run so the new report can weigh it. */
+export interface EvidenceItem {
+  title: string;
+  outcome: ExperimentOutcome;
+  notes: string;
+}
+
+export function completedEvidence(experiments: Experiment[]): EvidenceItem[] {
+  return experiments.flatMap((e) =>
+    e.status === "done" && e.outcome
+      ? [{ title: e.title, outcome: e.outcome, notes: e.notes }]
+      : []
+  );
+}
+
+/** A workspace: one idea, every report run against it, and its validation plan. */
 export interface Idea {
   id: string;
   title: string;
   createdAt: string;
   updatedAt: string;
+  /** Newest first. */
   versions: IdeaVersion[];
+  /** Oldest first. */
+  experiments: Experiment[];
 }
 
 export type AnalyzeIdeaResult =
@@ -88,6 +121,8 @@ export type AnalyzeIdeaResult =
 export interface AnalyzeIdeaOptions {
   clarification?: string;
   onPhase?: (phaseIndex: number) => void;
+  /** Finished experiments for the model to weigh when re-running an idea. */
+  evidence?: EvidenceItem[];
   /** Supabase access token; required by the server when sign-in is enabled. */
   accessToken?: string;
   timeoutMs?: number;
@@ -126,6 +161,7 @@ export async function analyzeIdea(
       body: JSON.stringify({
         rawIdea: trimmedIdea,
         clarification: options.clarification?.trim() || undefined,
+        evidence: options.evidence?.length ? options.evidence : undefined,
       }),
       signal: controller.signal,
     });

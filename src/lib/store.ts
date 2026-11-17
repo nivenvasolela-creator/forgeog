@@ -1,5 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { ForgeReportData, Idea, IdeaVersion } from "./analyzeIdea";
+import type {
+  Experiment,
+  ForgeReportData,
+  Idea,
+  IdeaVersion,
+} from "./analyzeIdea";
 
 export interface NewVersionInput {
   rawIdea: string;
@@ -13,7 +18,19 @@ export interface IdeaStore {
   /** Adds a report to an existing idea, or creates the idea when ideaId is null. */
   addVersion(ideaId: string | null, input: NewVersionInput): Promise<Idea>;
   deleteIdea(ideaId: string): Promise<void>;
+  /** Adds one "todo" experiment per title and returns the new rows. */
+  addExperiments(ideaId: string, titles: string[]): Promise<Experiment[]>;
+  updateExperiment(
+    ideaId: string,
+    experimentId: string,
+    patch: ExperimentPatch
+  ): Promise<void>;
+  deleteExperiment(ideaId: string, experimentId: string): Promise<void>;
 }
+
+export type ExperimentPatch = Partial<
+  Pick<Experiment, "status" | "outcome" | "notes">
+>;
 
 export function deriveTitle(data: ForgeReportData, rawIdea: string): string {
   const candidate =
@@ -41,7 +58,12 @@ function readLocalIdeas(): Idea[] {
     const raw = window.localStorage.getItem(IDEAS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
+      if (!Array.isArray(parsed)) return [];
+      // Ideas saved before validation plans existed have no experiments list.
+      return (parsed as Idea[]).map((i) => ({
+        ...i,
+        experiments: i.experiments ?? [],
+      }));
     }
     // First run after the workspace upgrade: turn each old saved report into an idea.
     const legacyRaw = window.localStorage.getItem(LEGACY_REPORTS_KEY);
@@ -56,6 +78,7 @@ function readLocalIdeas(): Idea[] {
         createdAt: r.createdAt,
         updatedAt: r.createdAt,
         versions: [r],
+        experiments: [],
       }));
     writeLocalIdeas(migrated);
     return migrated;
@@ -66,6 +89,16 @@ function readLocalIdeas(): Idea[] {
 
 function writeLocalIdeas(ideas: Idea[]): void {
   window.localStorage.setItem(IDEAS_KEY, JSON.stringify(ideas));
+}
+
+function updateLocalIdea(ideaId: string, change: (idea: Idea) => Idea): void {
+  try {
+    writeLocalIdeas(
+      readLocalIdeas().map((i) => (i.id === ideaId ? change(i) : i))
+    );
+  } catch {
+    throw new Error("This browser's storage is full or blocked.");
+  }
 }
 
 export function createLocalStore(): IdeaStore {
@@ -97,6 +130,7 @@ export function createLocalStore(): IdeaStore {
             createdAt: now,
             updatedAt: now,
             versions: [version],
+            experiments: [],
           };
       const next = [idea, ...ideas.filter((i) => i.id !== idea.id)].slice(
         0,
@@ -111,6 +145,38 @@ export function createLocalStore(): IdeaStore {
     },
     async deleteIdea(ideaId) {
       writeLocalIdeas(readLocalIdeas().filter((i) => i.id !== ideaId));
+    },
+    async addExperiments(ideaId, titles) {
+      const now = new Date().toISOString();
+      const added: Experiment[] = titles.map((title) => ({
+        id: newId(),
+        title,
+        status: "todo",
+        outcome: null,
+        notes: "",
+        createdAt: now,
+        updatedAt: now,
+      }));
+      updateLocalIdea(ideaId, (idea) => ({
+        ...idea,
+        experiments: [...idea.experiments, ...added],
+      }));
+      return added;
+    },
+    async updateExperiment(ideaId, experimentId, patch) {
+      const now = new Date().toISOString();
+      updateLocalIdea(ideaId, (idea) => ({
+        ...idea,
+        experiments: idea.experiments.map((e) =>
+          e.id === experimentId ? { ...e, ...patch, updatedAt: now } : e
+        ),
+      }));
+    },
+    async deleteExperiment(ideaId, experimentId) {
+      updateLocalIdea(ideaId, (idea) => ({
+        ...idea,
+        experiments: idea.experiments.filter((e) => e.id !== experimentId),
+      }));
     },
   };
 }
@@ -127,12 +193,35 @@ interface ReportRow {
   data: ForgeReportData;
 }
 
+interface ExperimentRow {
+  id: string;
+  title: string;
+  status: Experiment["status"];
+  outcome: Experiment["outcome"];
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function toExperiment(row: ExperimentRow): Experiment {
+  return {
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    outcome: row.outcome,
+    notes: row.notes,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 interface IdeaRow {
   id: string;
   title: string;
   created_at: string;
   updated_at: string;
   reports: ReportRow[] | null;
+  experiments: ExperimentRow[] | null;
 }
 
 function toVersion(row: ReportRow): IdeaVersion {
@@ -154,11 +243,15 @@ function toIdea(row: IdeaRow): Idea {
     versions: (row.reports ?? [])
       .map(toVersion)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    experiments: (row.experiments ?? [])
+      .map(toExperiment)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
   };
 }
 
-const IDEA_SELECT =
-  "id, title, created_at, updated_at, reports (id, created_at, raw_idea, clarification, data)";
+const EXPERIMENT_SELECT =
+  "id, title, status, outcome, notes, created_at, updated_at";
+const IDEA_SELECT = `id, title, created_at, updated_at, reports (id, created_at, raw_idea, clarification, data), experiments (${EXPERIMENT_SELECT})`;
 
 export function createSupabaseStore(sb: SupabaseClient): IdeaStore {
   const fetchIdea = async (ideaId: string): Promise<Idea> => {
@@ -210,6 +303,30 @@ export function createSupabaseStore(sb: SupabaseClient): IdeaStore {
     },
     async deleteIdea(ideaId) {
       const { error } = await sb.from("ideas").delete().eq("id", ideaId);
+      if (error) throw new Error(error.message);
+    },
+    async addExperiments(ideaId, titles) {
+      const { data, error } = await sb
+        .from("experiments")
+        .insert(titles.map((title) => ({ idea_id: ideaId, title })))
+        .select(EXPERIMENT_SELECT);
+      if (error) throw new Error(error.message);
+      return (data as ExperimentRow[])
+        .map(toExperiment)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    },
+    async updateExperiment(_ideaId, experimentId, patch) {
+      const { error } = await sb
+        .from("experiments")
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .eq("id", experimentId);
+      if (error) throw new Error(error.message);
+    },
+    async deleteExperiment(_ideaId, experimentId) {
+      const { error } = await sb
+        .from("experiments")
+        .delete()
+        .eq("id", experimentId);
       if (error) throw new Error(error.message);
     },
   };

@@ -14,6 +14,8 @@ interface InputScreenProps {
   onResetClarification: () => void;
   /** Title of the idea being revised, or null when starting a new idea. */
   revisingTitle: string | null;
+  /** Finished experiments that will be sent along with this re-run. */
+  revisingEvidenceCount: number;
   onCancelRevise: () => void;
   ideas: Idea[];
   ideasLoading: boolean;
@@ -34,6 +36,7 @@ export function InputScreen({
   onRetry,
   onResetClarification,
   revisingTitle,
+  revisingEvidenceCount,
   onCancelRevise,
   ideas,
   ideasLoading,
@@ -80,7 +83,12 @@ export function InputScreen({
             <div className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] px-4 py-3">
               <p className="min-w-0 text-sm leading-relaxed text-[#3F3F46]">
                 Revising <span className="font-medium text-[#18181B]">{revisingTitle}</span>.
-                The new report is saved as the next version of this idea.
+                The new report is saved as the next version of this idea
+                {revisingEvidenceCount > 0
+                  ? ` and will weigh ${revisingEvidenceCount} finished ${
+                      revisingEvidenceCount === 1 ? "experiment" : "experiments"
+                    }.`
+                  : "."}
               </p>
               <button
                 type="button"
@@ -232,6 +240,15 @@ export function InputScreen({
                             ? "1 report"
                             : `${idea.versions.length} reports`}
                         </span>
+                        {idea.experiments.length > 0 && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              {idea.experiments.filter((e) => e.status === "done").length}/
+                              {idea.experiments.length} experiments done
+                            </span>
+                          </>
+                        )}
                         <span aria-hidden="true">·</span>
                         <span>{dateLabel}</span>
                       </p>

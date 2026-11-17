@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import type { Idea, StoredForgeReport } from "../lib/analyzeIdea";
 import { formatReportAsMarkdown, getVerdictLabel } from "../lib/storage";
+import type { ExperimentPatch } from "../lib/store";
+import { ValidationPlan } from "./ValidationPlan";
 
 interface ReportScreenProps {
   idea: Idea;
@@ -22,6 +24,10 @@ interface ReportScreenProps {
   onNewIdea: () => void;
   onRevise: () => void;
   onDelete: () => void;
+  planDisabled: boolean;
+  onAddExperiments: (titles: string[]) => void;
+  onUpdateExperiment: (experimentId: string, patch: ExperimentPatch) => void;
+  onDeleteExperiment: (experimentId: string) => void;
 }
 
 const BREAKDOWN_LABELS: Array<{
@@ -44,6 +50,10 @@ export function ReportScreen({
   onNewIdea,
   onRevise,
   onDelete,
+  planDisabled,
+  onAddExperiments,
+  onUpdateExperiment,
+  onDeleteExperiment,
 }: ReportScreenProps) {
   const [copied, setCopied] = useState(false);
   // Versions are stored newest first; number them oldest = v1.
@@ -57,6 +67,9 @@ export function ReportScreen({
   const { data } = report;
   const overall = data.idea_score.overall;
   const delta = previous ? overall - previous.data.idea_score.overall : null;
+  const trackedTitles = new Set(
+    idea.experiments.map((e) => e.title.trim().toLowerCase())
+  );
   const verdict = getVerdictLabel(overall);
 
   const handleCopyMarkdown = async () => {
@@ -331,6 +344,15 @@ export function ReportScreen({
           </div>
         </section>
 
+        <ValidationPlan
+          experiments={idea.experiments}
+          disabled={planDisabled}
+          onAdd={(title) => onAddExperiments([title])}
+          onUpdate={onUpdateExperiment}
+          onDelete={onDeleteExperiment}
+          onRerun={onRevise}
+        />
+
         {/* SWOT 2x2 Grid */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
           <h2 className="font-display text-lg font-semibold text-[#18181B]">
@@ -500,7 +522,21 @@ export function ReportScreen({
                     <span className="font-mono text-xs font-semibold tabular-nums text-[#F97316] mt-0.5">
                       {idx + 1}.
                     </span>
-                    <span>{step}</span>
+                    <span className="min-w-0 flex-1">{step}</span>
+                    {!planDisabled &&
+                      (trackedTitles.has(step.trim().toLowerCase()) ? (
+                        <span className="shrink-0 text-xs text-[#787871]">
+                          In plan
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onAddExperiments([step.trim()])}
+                          className="shrink-0 cursor-pointer text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
+                        >
+                          Add to plan
+                        </button>
+                      ))}
                   </li>
                 ))}
               </ol>

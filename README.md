@@ -30,7 +30,7 @@ Without Supabase, FORGE runs with no sign-in and keeps ideas in the
 browser. To give each user an account and their own saved ideas:
 
 1. Create a project at supabase.com.
-2. In the SQL editor, run `supabase/migrations/0001_ideas_and_reports.sql`.
+2. In the SQL editor, run every file in `supabase/migrations/` in order.
 3. From Project Settings > API, copy the project URL and the `anon` public
    key into `.env` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 4. Rebuild and restart. The app now shows a sign-in screen, and
@@ -41,6 +41,9 @@ private to them.
 
 ## How it works
 
+- Each idea has a validation plan. A new idea's suggested tests become
+  experiments; mark them done with a result and notes, and the next re-run
+  sends those results to the model so the score reflects real evidence.
 - Each idea is a workspace. Re-running a revised idea adds a new report
   version, and the score change against the previous version is shown.
 - `server.ts` — Express server. `POST /api/analyze` streams progress over
