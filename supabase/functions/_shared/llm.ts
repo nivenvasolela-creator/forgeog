@@ -97,12 +97,58 @@ interface GeminiResponse {
   }>;
 }
 
+/**
+ * Picks a model when GEMINI_MODEL is not set: the newest "flash-lite" model
+ * the key can call (the family with the most generous free quota), else the
+ * newest "flash" model. Model names change often, so this avoids hard-coding one.
+ */
+async function pickGeminiModel(baseUrl: string, apiKey: string): Promise<string> {
+  const res = await fetch(`${baseUrl}/v1beta/models?pageSize=200`, {
+    headers: { "x-goog-api-key": apiKey },
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!res.ok) {
+    throw new LlmError(`Could not list Gemini models (${res.status}).`, res.status);
+  }
+  const body = (await res.json()) as {
+    models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>;
+  };
+  const usable = (body.models ?? [])
+    .filter((m) => m.supportedGenerationMethods?.includes("generateContent"))
+    .map((m) => (m.name ?? "").replace(/^models\//, ""))
+    .filter((n) => /^gemini-[\d.]+-flash/.test(n) && !/preview|exp|tts|image|audio|live|thinking/.test(n));
+  const version = (n: string) => Number(n.match(/^gemini-([\d.]+)/)?.[1] ?? 0);
+  const newest = (list: string[]) => list.sort((a, b) => version(b) - version(a))[0];
+  const pick =
+    newest(usable.filter((n) => n.includes("flash-lite"))) ??
+    newest(usable.filter((n) => !n.includes("lite")));
+  if (!pick) throw new LlmError("No usable Gemini Flash model is available for this key.");
+  return pick;
+}
+
 function createGemini(env: Env): Llm {
   const apiKey = env.GEMINI_API_KEY?.trim();
-  const model = env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
+  const configuredModel = env.GEMINI_MODEL?.trim() ?? "";
   const baseUrl = (
     env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com"
   ).replace(/\/+$/, "");
+  let model = configuredModel || "auto";
+  let modelReady: Promise<string> | null = configuredModel
+    ? Promise.resolve(configuredModel)
+    : null;
+  const resolveModel = (): Promise<string> => {
+    if (!modelReady) {
+      modelReady = pickGeminiModel(baseUrl, apiKey ?? "").then((picked) => {
+        model = picked;
+        return picked;
+      });
+      // A failed lookup should be retried on the next request, not cached.
+      modelReady.catch(() => {
+        modelReady = null;
+      });
+    }
+    return modelReady;
+  };
 
   const generate = async (
     body: Record<string, unknown>
@@ -110,8 +156,9 @@ function createGemini(env: Env): Llm {
     if (!apiKey) {
       throw new LlmError("GEMINI_API_KEY is not configured on the server.");
     }
+    const modelName = await resolveModel();
     const res = await fetch(
-      `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      `${baseUrl}/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
@@ -142,17 +189,22 @@ function createGemini(env: Env): Llm {
 
   return {
     label: "Gemini",
-    model,
+    get model() {
+      return model;
+    },
     keyConfigured: Boolean(apiKey),
     keyVariable: "GEMINI_API_KEY",
     async generateJson({ system, prompt, schema, effort }) {
+      // The model must be known before building the request (see below).
+      const modelName = apiKey ? await resolveModel() : model;
       const { text } = await generate({
         systemInstruction: { parts: [{ text: system }] },
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: { thinkingLevel: effort },
+          // Flash-Lite models reject thinking settings, so only send them elsewhere.
+          ...(modelName.includes("lite") ? {} : { thinkingConfig: { thinkingLevel: effort } }),
           seed: 42,
         },
       });
@@ -310,4 +362,91 @@ function createOpenAiCompatible(baseUrl: string, env: Env): Llm {
 export function createLlm(env: Env): Llm {
   const baseUrl = env.LLM_BASE_URL?.trim();
   return baseUrl ? createOpenAiCompatible(baseUrl, env) : createGemini(env);
+}
+
+/** True when a provider refused because a rate or daily quota ran out, or is overloaded. */
+export function isQuotaOrOverload(err: unknown): boolean {
+  const status = err instanceof LlmError ? err.status : undefined;
+  if (status === 429 || status === 503) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /RESOURCE_EXHAUSTED|quota|rate limit|free-models-per-day|overloaded|UNAVAILABLE/i.test(
+    message
+  );
+}
+
+/** How long a provider that ran out of quota is skipped before being tried again. */
+const COOL_DOWN_MS = 10 * 60 * 1000;
+
+/**
+ * Every provider that has a key, in order: Gemini first (largest free daily
+ * allowance), then the OpenAI-compatible provider (OpenRouter by default).
+ * When one runs out of quota the next takes over, so free allowances stack.
+ */
+export function createLlmChain(env: Env, defaults: Env = {}): Llm {
+  const providers: Llm[] = [];
+  if (env.GEMINI_API_KEY?.trim()) providers.push(createGemini(env));
+  const baseUrl = env.LLM_BASE_URL?.trim() || defaults.LLM_BASE_URL;
+  if (baseUrl && (env.LLM_API_KEY?.trim() || env.LLM_BASE_URL?.trim())) {
+    providers.push(
+      createOpenAiCompatible(baseUrl, {
+        ...env,
+        LLM_MODEL: env.LLM_MODEL?.trim() || defaults.LLM_MODEL,
+      })
+    );
+  }
+  if (providers.length === 0) return createLlm(env);
+  if (providers.length === 1) return providers[0];
+
+  const coolingUntil = new Map<Llm, number>();
+  // The provider that served most recently; error messages name it.
+  let current = providers[0];
+
+  const ordered = (): Llm[] => {
+    const now = Date.now();
+    const ready = providers.filter((p) => (coolingUntil.get(p) ?? 0) <= now);
+    // If every provider is cooling down, still try them all in order.
+    return ready.length > 0 ? ready : providers;
+  };
+
+  async function attempt<T>(run: (p: Llm) => Promise<T>, onlyWith?: (p: Llm) => boolean): Promise<T> {
+    let lastError: unknown;
+    for (const provider of ordered()) {
+      if (onlyWith && !onlyWith(provider)) continue;
+      current = provider;
+      try {
+        return await run(provider);
+      } catch (err) {
+        lastError = err;
+        if (!isQuotaOrOverload(err)) throw err;
+        coolingUntil.set(provider, Date.now() + COOL_DOWN_MS);
+      }
+    }
+    throw lastError ?? new LlmError("No AI provider is available.");
+  }
+
+  const researcher = providers.find((p) => p.research);
+  return {
+    get label() {
+      return current.label;
+    },
+    get model() {
+      return current.model;
+    },
+    get keyVariable() {
+      return current.keyVariable;
+    },
+    keyConfigured: providers.some((p) => p.keyConfigured),
+    generateJson: (request) => attempt((p) => p.generateJson(request)),
+    research: researcher
+      ? (system, prompt) => attempt((p) => p.research!(system, prompt), (p) => Boolean(p.research))
+      : null,
+  };
+}
+
+/** Names of the providers in a chain, for the health check. */
+export function describeChain(env: Env): string[] {
+  const names: string[] = [];
+  if (env.GEMINI_API_KEY?.trim()) names.push("Gemini");
+  if (env.LLM_API_KEY?.trim() || env.LLM_BASE_URL?.trim()) names.push("OpenAI-compatible");
+  return names;
 }

@@ -7,22 +7,18 @@ import {
   recordRunInDatabase,
   verifyUser,
 } from "../_shared/access.ts";
-import { createLlm } from "../_shared/llm.ts";
+import { createLlmChain, describeChain } from "../_shared/llm.ts";
 import { createSearch } from "../_shared/search.ts";
 import { prepareJob } from "../_shared/router.ts";
 
 const env = Deno.env.toObject();
 
-// With no provider configured, default to a free open model on OpenRouter.
-const llm = createLlm(
-  env.LLM_BASE_URL || env.GEMINI_API_KEY
-    ? env
-    : {
-        ...env,
-        LLM_BASE_URL: "https://openrouter.ai/api/v1",
-        LLM_MODEL: env.LLM_MODEL || "nvidia/nemotron-3-ultra-550b-a55b:free",
-      }
-);
+// Gemini first when GEMINI_API_KEY is set, then a free open model on
+// OpenRouter; when one runs out of quota the next one takes over.
+const llm = createLlmChain(env, {
+  LLM_BASE_URL: "https://openrouter.ai/api/v1",
+  LLM_MODEL: "nvidia/nemotron-3-ultra-550b-a55b:free",
+});
 const search = createSearch(env);
 
 const SUPABASE_URL = env.SUPABASE_URL ?? "";
@@ -54,6 +50,7 @@ Deno.serve(async (req: Request) => {
       ok: true,
       provider: llm.label,
       model: llm.model,
+      providers: describeChain(env),
       apiKeyConfigured: llm.keyConfigured,
       webSearch: Boolean(search ?? llm.research),
       signInRequired: true,

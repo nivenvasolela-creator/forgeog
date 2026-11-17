@@ -49,18 +49,28 @@ The hosted setup has two parts, both free and neither goes to sleep:
 
 ## Choosing a model
 
-FORGE runs on either of these; the code for both is in
-`supabase/functions/_shared/llm.ts`.
+FORGE can use several providers at once and falls back between them; the
+code is in `supabase/functions/_shared/llm.ts`.
 
-- **Open models (for example NVIDIA Nemotron), free.** Set `LLM_BASE_URL`,
-  `LLM_API_KEY` and `LLM_MODEL` to any OpenAI-compatible API: OpenRouter,
-  NVIDIA, Groq, or Ollama on your own machine. FORGE asks for strict JSON
-  and steps down automatically for models that do not support it. These
-  providers have no built-in web search; set `TAVILY_API_KEY` (free plan)
-  to ground competitors in real pages, otherwise reports say plainly that
-  nothing was checked against the web.
-- **Gemini.** Set `GEMINI_API_KEY`. On a paid plan this also grounds
-  competitors in Google Search results.
+- **Gemini (recommended first, free).** Set `GEMINI_API_KEY` (free from
+  Google AI Studio, no card). Without `GEMINI_MODEL`, FORGE picks the newest
+  stable Flash-Lite model the key can use, the family with the largest free
+  daily allowance. Free-tier prompts may be used by Google to improve its
+  products.
+- **Open models through any OpenAI-compatible API, free.** Set `LLM_API_KEY`
+  (and optionally `LLM_BASE_URL` and `LLM_MODEL`; the hosted function
+  defaults to NVIDIA Nemotron on OpenRouter). FORGE asks for strict JSON and
+  steps down automatically for models that do not support it.
+- **Fallback.** With both configured, Gemini is tried first. When a
+  provider runs out of quota or is overloaded, the next one serves the
+  request, and the exhausted one is skipped for 10 minutes. The health check
+  (`GET` on the API) lists the configured providers.
+- **Web search.** Set `TAVILY_API_KEY` (free plan) to ground competitors in
+  real pages; otherwise reports say plainly that nothing was checked against
+  the web.
+
+Groq's free tier was considered and left out: its per-minute token cap is
+smaller than one full FORGE report.
 
 ## Accounts and saved workspaces (Supabase)
 
