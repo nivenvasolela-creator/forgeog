@@ -39,6 +39,22 @@ browser. To give each user an account and their own saved ideas:
 Row level security in the migration keeps every user's ideas and reports
 private to them.
 
+## Hosting on GitHub Pages
+
+Pages only serves static files, so the analysis runs in a Supabase Edge
+Function (`supabase/functions/analyze`) instead of `server.ts`. Both share
+the pipeline in `supabase/functions/analyze/core.ts`. Supabase is required
+for this setup.
+
+1. Deploy the function with JWT verification off (it checks the session
+   itself): `supabase functions deploy analyze --no-verify-jwt`.
+2. Give it the key: `supabase secrets set GEMINI_API_KEY=...`
+   (`GEMINI_MODEL` and `RATE_LIMIT_MAX` are optional).
+3. In the repository, set Settings > Pages > Source to "GitHub Actions".
+4. Push to `main`. `.github/workflows/pages.yml` builds and publishes the
+   site; edit the project values at the top of that file for another
+   Supabase project.
+
 ## How it works
 
 - Each idea is a workspace. Re-running a revised idea adds a new report

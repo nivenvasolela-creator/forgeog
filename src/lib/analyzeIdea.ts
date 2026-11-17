@@ -93,6 +93,11 @@ export interface AnalyzeIdeaOptions {
   timeoutMs?: number;
 }
 
+// The bundled Express server by default; a static deployment (GitHub Pages)
+// points this at the hosted Supabase Edge Function instead.
+const ANALYZE_URL = import.meta.env.VITE_ANALYZE_URL?.trim() || "/api/analyze";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
 export async function analyzeIdea(
   rawIdea: string,
   options: AnalyzeIdeaOptions = {}
@@ -114,7 +119,7 @@ export async function analyzeIdea(
   }, timeoutMs);
 
   try {
-    const response = await fetch("/api/analyze", {
+    const response = await fetch(ANALYZE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -122,6 +127,7 @@ export async function analyzeIdea(
         ...(options.accessToken
           ? { Authorization: `Bearer ${options.accessToken}` }
           : {}),
+        ...(SUPABASE_KEY ? { apikey: SUPABASE_KEY } : {}),
       },
       body: JSON.stringify({
         rawIdea: trimmedIdea,
