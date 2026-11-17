@@ -43,7 +43,7 @@ Without Supabase, FORGE runs with no sign-in and keeps ideas in the
 browser. To give each user an account and their own saved ideas:
 
 1. Create a project at supabase.com.
-2. In the SQL editor, run every file in `supabase/migrations/` in order.
+2. In the SQL editor, run the files in `supabase/migrations/` in order (`0000` only matters if the project has tables from an older prototype).
 3. From Project Settings > API, copy the project URL and the `anon` public
    key into `.env` as `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`.
 4. Rebuild and restart. The app now shows a sign-in screen, and
