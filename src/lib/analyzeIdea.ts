@@ -21,6 +21,8 @@ export interface ForgeSource {
 }
 
 export interface ForgeReportData {
+  /** Short name for the idea. Missing on reports saved before workspaces existed. */
+  idea_title?: string;
   idea_summary: string;
   idea_score: {
     overall: number;
@@ -67,6 +69,51 @@ export interface StoredForgeReport {
   data: ForgeReportData;
 }
 
+/** One analysis run of an idea. */
+export type IdeaVersion = StoredForgeReport;
+
+export type ExperimentStatus = "todo" | "running" | "done";
+export type ExperimentOutcome = "supported" | "refuted" | "inconclusive";
+
+/** One thing the founder is doing to test the idea in the real world. */
+export interface Experiment {
+  id: string;
+  title: string;
+  status: ExperimentStatus;
+  /** Only meaningful once status is "done". */
+  outcome: ExperimentOutcome | null;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A finished experiment, sent with a re-run so the new report can weigh it. */
+export interface EvidenceItem {
+  title: string;
+  outcome: ExperimentOutcome;
+  notes: string;
+}
+
+export function completedEvidence(experiments: Experiment[]): EvidenceItem[] {
+  return experiments.flatMap((e) =>
+    e.status === "done" && e.outcome
+      ? [{ title: e.title, outcome: e.outcome, notes: e.notes }]
+      : []
+  );
+}
+
+/** A workspace: one idea, every report run against it, and its validation plan. */
+export interface Idea {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Newest first. */
+  versions: IdeaVersion[];
+  /** Oldest first. */
+  experiments: Experiment[];
+}
+
 export type AnalyzeIdeaResult =
   | { status: "clarification_needed"; question: string }
   | { status: "complete"; report: ForgeReportData };
@@ -74,8 +121,16 @@ export type AnalyzeIdeaResult =
 export interface AnalyzeIdeaOptions {
   clarification?: string;
   onPhase?: (phaseIndex: number) => void;
+  /** Finished experiments for the model to weigh when re-running an idea. */
+  evidence?: EvidenceItem[];
+  /** Supabase access token; required by the server when sign-in is enabled. */
+  accessToken?: string;
   timeoutMs?: number;
 }
+
+// The hosted build points this at the Supabase Edge Function; self-hosted
+// builds use the Node server on the same origin.
+const ANALYZE_URL = import.meta.env.VITE_API_URL?.trim() || "/api/analyze";
 
 export async function analyzeIdea(
   rawIdea: string,
@@ -89,7 +144,7 @@ export async function analyzeIdea(
   }
 
   const controller = new AbortController();
-  const timeoutMs = options.timeoutMs ?? 90_000;
+  const timeoutMs = options.timeoutMs ?? 180_000;
   let didTimeout = false;
 
   const timer = window.setTimeout(() => {
@@ -98,15 +153,19 @@ export async function analyzeIdea(
   }, timeoutMs);
 
   try {
-    const response = await fetch("/api/analyze", {
+    const response = await fetch(ANALYZE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Accept: "text/event-stream",
+        ...(options.accessToken
+          ? { Authorization: `Bearer ${options.accessToken}` }
+          : {}),
       },
       body: JSON.stringify({
         rawIdea: trimmedIdea,
         clarification: options.clarification?.trim() || undefined,
+        evidence: options.evidence?.length ? options.evidence : undefined,
       }),
       signal: controller.signal,
     });

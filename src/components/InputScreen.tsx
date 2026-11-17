@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowRight, RotateCcw } from "lucide-react";
-import type { StoredForgeReport } from "../lib/analyzeIdea";
+import type { Idea } from "../lib/analyzeIdea";
 import { getVerdictLabel } from "../lib/storage";
 
 interface InputScreenProps {
@@ -12,9 +12,17 @@ interface InputScreenProps {
   onSubmit: () => void;
   onRetry: () => void;
   onResetClarification: () => void;
-  recentReports: StoredForgeReport[];
-  onSelectReport: (report: StoredForgeReport) => void;
-  onClearHistory: () => void;
+  /** Title of the idea being revised, or null when starting a new idea. */
+  revisingTitle: string | null;
+  /** Finished experiments that will be sent along with this re-run. */
+  revisingEvidenceCount: number;
+  onCancelRevise: () => void;
+  ideas: Idea[];
+  ideasLoading: boolean;
+  onSelectIdea: (idea: Idea) => void;
+  /** Null when sign-in is not enabled (browser-only mode). */
+  userEmail: string | null;
+  onSignOut: (() => void) | null;
 }
 
 export function InputScreen({
@@ -27,9 +35,14 @@ export function InputScreen({
   onSubmit,
   onRetry,
   onResetClarification,
-  recentReports,
-  onSelectReport,
-  onClearHistory,
+  revisingTitle,
+  revisingEvidenceCount,
+  onCancelRevise,
+  ideas,
+  ideasLoading,
+  onSelectIdea,
+  userEmail,
+  onSignOut,
 }: InputScreenProps) {
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,9 +52,23 @@ export function InputScreen({
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
       <header className="mb-8 sm:mb-10">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
-          FORGE
-        </h1>
+        <div className="flex items-baseline justify-between gap-4">
+          <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
+            FORGE
+          </h1>
+          {onSignOut && (
+            <div className="flex min-w-0 items-baseline gap-3 text-xs text-[#6B6B65]">
+              {userEmail && <span className="truncate">{userEmail}</span>}
+              <button
+                type="button"
+                onClick={onSignOut}
+                className="shrink-0 cursor-pointer font-medium underline underline-offset-4 hover:text-[#18181B]"
+              >
+                Sign out
+              </button>
+            </div>
+          )}
+        </div>
         <p className="mt-2 max-w-xl text-base leading-relaxed text-[#575752]">
           Paste your startup idea and get one honest, grounded reality-check report.
         </p>
@@ -52,11 +79,32 @@ export function InputScreen({
           onSubmit={handleFormSubmit}
           className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"
         >
+          {revisingTitle && (
+            <div className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] px-4 py-3">
+              <p className="min-w-0 text-sm leading-relaxed text-[#3F3F46]">
+                Revising <span className="font-medium text-[#18181B]">{revisingTitle}</span>.
+                The new report is saved as the next version of this idea
+                {revisingEvidenceCount > 0
+                  ? ` and will weigh ${revisingEvidenceCount} finished ${
+                      revisingEvidenceCount === 1 ? "experiment" : "experiments"
+                    }.`
+                  : "."}
+              </p>
+              <button
+                type="button"
+                onClick={onCancelRevise}
+                className="shrink-0 cursor-pointer text-xs font-medium text-[#6B6B65] underline underline-offset-4 hover:text-[#18181B]"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+
           <label
             htmlFor="idea-input"
             className="block text-sm font-medium text-[#18181B]"
           >
-            Your startup idea
+            {revisingTitle ? "Updated idea" : "Your startup idea"}
           </label>
 
           <textarea
@@ -129,65 +177,102 @@ export function InputScreen({
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-[#6B6B65]">
-              Grounded against live search sources. Unverified numbers are flagged.
+              No flattery. Anything that could not be verified is flagged.
             </p>
             <button
               type="submit"
               className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#EA580C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] sm:w-auto"
             >
-              <span>{clarifyingQuestion ? "CONTINUE" : "IGNITE"}</span>
+              <span>
+                {clarifyingQuestion ? "CONTINUE" : revisingTitle ? "RE-RUN" : "IGNITE"}
+              </span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
         </form>
 
-        {recentReports.length > 0 && (
-          <section className="mt-10">
-            <div className="mb-3 flex items-center justify-between px-1">
-              <h2 className="text-sm font-medium text-[#575752]">
-                Saved reports (last {recentReports.length})
-              </h2>
-              <button
-                type="button"
-                onClick={onClearHistory}
-                className="text-xs text-[#787871] underline underline-offset-4 hover:text-[#18181B]"
-              >
-                Clear saved
-              </button>
-            </div>
+        <section className="mt-10">
+          <div className="mb-3 flex items-baseline justify-between px-1">
+            <h2 className="text-sm font-medium text-[#575752]">Your ideas</h2>
+            {!onSignOut && (
+              <span className="text-xs text-[#787871]">
+                Saved in this browser only
+              </span>
+            )}
+          </div>
 
+          {ideasLoading ? (
+            <p className="px-1 text-sm text-[#787871]">Loading your ideas...</p>
+          ) : ideas.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-[#DFDED8] px-5 py-6 text-sm leading-relaxed text-[#6B6B65]">
+              Nothing here yet. Each idea you test gets its own workspace, so you
+              can revise it and see whether the score moves.
+            </p>
+          ) : (
             <div className="divide-y divide-[#ECEBE6] rounded-2xl border border-[#E5E4DF] bg-white">
-              {recentReports.map((item) => {
-                const dateLabel = new Date(item.createdAt).toLocaleDateString(
+              {ideas.map((idea) => {
+                const latest = idea.versions[0];
+                const previous = idea.versions[1];
+                const score = latest.data.idea_score.overall;
+                const delta = previous
+                  ? score - previous.data.idea_score.overall
+                  : null;
+                const dateLabel = new Date(idea.updatedAt).toLocaleDateString(
                   undefined,
                   { month: "short", day: "numeric" }
                 );
                 return (
                   <button
-                    key={item.id}
+                    key={idea.id}
                     type="button"
-                    onClick={() => onSelectReport(item)}
+                    onClick={() => onSelectIdea(idea)}
                     className="flex min-h-[56px] w-full cursor-pointer items-center justify-between gap-4 px-5 py-3.5 text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl hover:bg-[#FAFAF8]"
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-[#18181B]">
-                        {item.data.idea_summary || item.rawIdea}
+                        {idea.title}
                       </p>
-                      <p className="mt-0.5 flex items-center gap-2 text-xs text-[#6B6B65]">
-                        <span>{getVerdictLabel(item.data.idea_score.overall)}</span>
+                      <p className="mt-0.5 flex flex-wrap items-center gap-x-2 text-xs text-[#6B6B65]">
+                        <span>{getVerdictLabel(score)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>
+                          {idea.versions.length === 1
+                            ? "1 report"
+                            : `${idea.versions.length} reports`}
+                        </span>
+                        {idea.experiments.length > 0 && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              {idea.experiments.filter((e) => e.status === "done").length}/
+                              {idea.experiments.length} experiments done
+                            </span>
+                          </>
+                        )}
                         <span aria-hidden="true">·</span>
                         <span>{dateLabel}</span>
                       </p>
                     </div>
-                    <div className="shrink-0 font-mono text-sm font-semibold tabular-nums text-[#18181B]">
-                      {item.data.idea_score.overall}/100
+                    <div className="shrink-0 text-right">
+                      <div className="font-mono text-sm font-semibold tabular-nums text-[#18181B]">
+                        {score}/100
+                      </div>
+                      {delta !== null && delta !== 0 && (
+                        <div
+                          className={`font-mono text-xs tabular-nums ${
+                            delta > 0 ? "text-[#15803D]" : "text-[#B91C1C]"
+                          }`}
+                        >
+                          {delta > 0 ? `+${delta}` : delta}
+                        </div>
+                      )}
                     </div>
                   </button>
                 );
               })}
             </div>
-          </section>
-        )}
+          )}
+        </section>
       </main>
     </div>
   );
