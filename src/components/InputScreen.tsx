@@ -177,7 +177,7 @@ export function InputScreen({
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs leading-relaxed text-[#6B6B65]">
-              Grounded against live search sources. Unverified numbers are flagged.
+              No flattery. Anything that could not be verified is flagged.
             </p>
             <button
               type="submit"
