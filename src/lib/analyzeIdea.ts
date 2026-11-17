@@ -128,6 +128,10 @@ export interface AnalyzeIdeaOptions {
   timeoutMs?: number;
 }
 
+// The hosted build points this at the Supabase Edge Function; self-hosted
+// builds use the Node server on the same origin.
+const ANALYZE_URL = import.meta.env.VITE_API_URL?.trim() || "/api/analyze";
+
 export async function analyzeIdea(
   rawIdea: string,
   options: AnalyzeIdeaOptions = {}
@@ -149,7 +153,7 @@ export async function analyzeIdea(
   }, timeoutMs);
 
   try {
-    const response = await fetch("/api/analyze", {
+    const response = await fetch(ANALYZE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

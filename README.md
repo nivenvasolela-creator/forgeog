@@ -24,15 +24,32 @@ npm start
 
 `GET /api/health` reports the provider, model, and whether a key is set.
 
+## Hosting for free
+
+The hosted setup has two parts, both free and neither goes to sleep:
+
+- **Site:** GitHub Pages. `.github/workflows/deploy.yml` builds the app on
+  every push and publishes it to the `gh-pages` branch. Turn it on once in
+  the repo under Settings > Pages > Deploy from a branch > `gh-pages`.
+- **API:** the Supabase Edge Function in `supabase/functions/analyze`. It
+  runs the same pipeline as `server.ts` (shared code is in
+  `supabase/functions/_shared`). Deploy with
+  `supabase functions deploy analyze`, and set the secrets `LLM_API_KEY`
+  (and optionally `TAVILY_API_KEY`) in the Supabase dashboard under
+  Edge Functions > Secrets. Without other settings it uses a free NVIDIA
+  Nemotron model on OpenRouter.
+
 ## Choosing a model
 
-FORGE runs on either of these; the code for both is in `llm.ts`.
+FORGE runs on either of these; the code for both is in
+`supabase/functions/_shared/llm.ts`.
 
 - **Open models (for example NVIDIA Nemotron), free.** Set `LLM_BASE_URL`,
   `LLM_API_KEY` and `LLM_MODEL` to any OpenAI-compatible API: OpenRouter,
   NVIDIA, Groq, or Ollama on your own machine. FORGE asks for strict JSON
   and steps down automatically for models that do not support it. These
-  providers have no built-in web search, so reports say plainly that
+  providers have no built-in web search; set `TAVILY_API_KEY` (free plan)
+  to ground competitors in real pages, otherwise reports say plainly that
   nothing was checked against the web.
 - **Gemini.** Set `GEMINI_API_KEY`. On a paid plan this also grounds
   competitors in Google Search results.
@@ -59,10 +76,10 @@ private to them.
   sends those results to the model so the score reflects real evidence.
 - Each idea is a workspace. Re-running a revised idea adds a new report
   version, and the score change against the previous version is shown.
-- `server.ts` — Express server. `POST /api/analyze` streams progress over
-  SSE and makes up to three model calls: a clarity check (may return one
-  clarifying question), Google-Search-grounded research, then a structured
-  JSON report. Competitors are only kept if they point at a source the
+- `supabase/functions/_shared/analysis.ts` — the pipeline: a clarity check
+  (may return one clarifying question), web research, then a structured
+  JSON report, streamed to the browser as server-sent events. `server.ts`
+  (Node) and the edge function are thin hosts around it. Competitors are only kept if they point at a source the
   search actually returned.
 - `src/` — React + Tailwind UI: input, working, and report screens.
   `src/lib/store.ts` saves ideas to Supabase when configured, otherwise to
@@ -77,4 +94,5 @@ private to them.
 | `GEMINI_MODEL` | no | Override the Gemini model |
 | `RATE_LIMIT_MAX` | no | Analyses per IP per 10 minutes (default 10) |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | no | Turn on sign-in and per-user storage |
+| `TAVILY_API_KEY` | no | Live web search for grounded competitors |
 | `PORT` | no | Listen port (default 3000) |

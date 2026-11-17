@@ -1,0 +1,5 @@
+project_id = "bypsmyxdewspfgncbrnp"
+
+# The function checks the caller's session itself, so the gateway check is off.
+[functions.analyze]
+verify_jwt = false

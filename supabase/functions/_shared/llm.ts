@@ -2,7 +2,8 @@
 //  - Gemini (Google's API), which can also ground research in Google Search.
 //  - Any OpenAI-compatible chat API (OpenRouter, NVIDIA NIM, Groq, Ollama, ...),
 //    which is how open models such as NVIDIA Nemotron are used.
-import { GoogleGenAI, ThinkingLevel } from "@google/genai";
+/** Configuration values, read from the process or Deno environment by the caller. */
+export type Env = Record<string, string | undefined>;
 
 /** Schema in the Gemini SDK's shape: `type` is an upper-case name such as "OBJECT". */
 export interface SchemaNode {
@@ -83,19 +84,60 @@ export function toJsonSchema(node: SchemaNode): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
-// Gemini
+// Gemini (REST, so no SDK is needed in either runtime)
 // ---------------------------------------------------------------------------
 
-function createGemini(): Llm {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  const model = process.env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
-  let client: GoogleGenAI | null = null;
-  const getClient = (): GoogleGenAI => {
+interface GeminiResponse {
+  error?: { code?: number; message?: string };
+  candidates?: Array<{
+    content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+    groundingMetadata?: {
+      groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+    };
+  }>;
+}
+
+function createGemini(env: Env): Llm {
+  const apiKey = env.GEMINI_API_KEY?.trim();
+  const model = env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
+  const baseUrl = (
+    env.GEMINI_BASE_URL?.trim() || "https://generativelanguage.googleapis.com"
+  ).replace(/\/+$/, "");
+
+  const generate = async (
+    body: Record<string, unknown>
+  ): Promise<{ text: string; response: GeminiResponse }> => {
     if (!apiKey) {
       throw new LlmError("GEMINI_API_KEY is not configured on the server.");
     }
-    client ??= new GoogleGenAI({ apiKey });
-    return client;
+    const res = await fetch(
+      `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(150_000),
+      }
+    );
+    const raw = await res.text();
+    let response: GeminiResponse = {};
+    try {
+      response = JSON.parse(raw);
+    } catch {
+      // Non-JSON body; handled below.
+    }
+    if (!res.ok || response.error) {
+      throw new LlmError(
+        response.error?.message || raw.slice(0, 300) || res.statusText,
+        response.error?.code ?? res.status
+      );
+    }
+    const text = (response.candidates?.[0]?.content?.parts ?? [])
+      .filter((part) => !part.thought)
+      .map((part) => part.text ?? "")
+      .join("")
+      .trim();
+    return { text, response };
   };
 
   return {
@@ -104,33 +146,25 @@ function createGemini(): Llm {
     keyConfigured: Boolean(apiKey),
     keyVariable: "GEMINI_API_KEY",
     async generateJson({ system, prompt, schema, effort }) {
-      const response = await getClient().models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          systemInstruction: system,
+      const { text } = await generate({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
           responseMimeType: "application/json",
           responseSchema: schema,
-          thinkingConfig: {
-            thinkingLevel:
-              effort === "low" ? ThinkingLevel.LOW : ThinkingLevel.MEDIUM,
-          },
+          thinkingConfig: { thinkingLevel: effort },
           seed: 42,
         },
       });
-      const text = (response.text ?? "").trim();
       if (!text) throw new LlmError("The model returned an empty response.");
       return extractJson(text);
     },
     async research(system, prompt) {
-      const response = await getClient().models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          systemInstruction: system,
-          tools: [{ googleSearch: {} }],
-          seed: 42,
-        },
+      const { text, response } = await generate({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }],
+        generationConfig: { seed: 42 },
       });
       const sources: ResearchResult["sources"] = [];
       const seen = new Set<string>();
@@ -143,7 +177,7 @@ function createGemini(): Llm {
           sources.push({ title: chunk.web?.title?.trim() || url, url });
         }
       }
-      return { notes: (response.text ?? "").trim(), sources };
+      return { notes: text, sources };
     },
   };
 }
@@ -165,9 +199,9 @@ function providerLabel(baseUrl: string): string {
   }
 }
 
-function createOpenAiCompatible(baseUrl: string): Llm {
-  const apiKey = process.env.LLM_API_KEY?.trim();
-  const model = process.env.LLM_MODEL?.trim() ?? "";
+function createOpenAiCompatible(baseUrl: string, env: Env): Llm {
+  const apiKey = env.LLM_API_KEY?.trim();
+  const model = env.LLM_MODEL?.trim() ?? "";
   const endpoint = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
   const chat = async (
@@ -273,7 +307,7 @@ function createOpenAiCompatible(baseUrl: string): Llm {
   };
 }
 
-export function createLlm(): Llm {
-  const baseUrl = process.env.LLM_BASE_URL?.trim();
-  return baseUrl ? createOpenAiCompatible(baseUrl) : createGemini();
+export function createLlm(env: Env): Llm {
+  const baseUrl = env.LLM_BASE_URL?.trim();
+  return baseUrl ? createOpenAiCompatible(baseUrl, env) : createGemini(env);
 }
