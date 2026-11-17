@@ -7,11 +7,11 @@ could not be verified.
 
 ## Run it
 
-Requires Node 22.18+ and a Gemini API key.
+Requires Node 22.18+ and a key for a model provider (see "Choosing a model").
 
 ```bash
 npm install
-cp .env.example .env   # then set GEMINI_API_KEY
+cp .env.example .env   # then set your model provider
 npm run dev            # http://localhost:3000
 ```
 
@@ -22,7 +22,20 @@ npm run build
 npm start
 ```
 
-`GET /api/health` reports the configured model and whether a key is set.
+`GET /api/health` reports the provider, model, and whether a key is set.
+
+## Choosing a model
+
+FORGE runs on either of these; the code for both is in `llm.ts`.
+
+- **Open models (for example NVIDIA Nemotron), free.** Set `LLM_BASE_URL`,
+  `LLM_API_KEY` and `LLM_MODEL` to any OpenAI-compatible API: OpenRouter,
+  NVIDIA, Groq, or Ollama on your own machine. FORGE asks for strict JSON
+  and steps down automatically for models that do not support it. These
+  providers have no built-in web search, so reports say plainly that
+  nothing was checked against the web.
+- **Gemini.** Set `GEMINI_API_KEY`. On a paid plan this also grounds
+  competitors in Google Search results.
 
 ## Accounts and saved workspaces (Supabase)
 
@@ -47,7 +60,7 @@ private to them.
 - Each idea is a workspace. Re-running a revised idea adds a new report
   version, and the score change against the previous version is shown.
 - `server.ts` — Express server. `POST /api/analyze` streams progress over
-  SSE and makes up to three Gemini calls: a clarity check (may return one
+  SSE and makes up to three model calls: a clarity check (may return one
   clarifying question), Google-Search-grounded research, then a structured
   JSON report. Competitors are only kept if they point at a source the
   search actually returned.
@@ -59,8 +72,9 @@ private to them.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | yes | Gemini API key |
-| `GEMINI_MODEL` | no | Override the model (default set in `server.ts`) |
+| `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | one provider | OpenAI-compatible provider for open models |
+| `GEMINI_API_KEY` | one provider | Gemini API key, used when `LLM_BASE_URL` is unset |
+| `GEMINI_MODEL` | no | Override the Gemini model |
 | `RATE_LIMIT_MAX` | no | Analyses per IP per 10 minutes (default 10) |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | no | Turn on sign-in and per-user storage |
 | `PORT` | no | Listen port (default 3000) |

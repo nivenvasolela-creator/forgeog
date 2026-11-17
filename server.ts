@@ -3,14 +3,15 @@ import express from "express";
 import type { Request, Response } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { GoogleGenAI, ThinkingLevel, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { createLlm, type SchemaNode } from "./llm.ts";
 import { createClient } from "@supabase/supabase-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = Number(process.env.PORT) || 3000;
-const MODEL_NAME = process.env.GEMINI_MODEL?.trim() || "gemini-4-hydrogen";
+const llm = createLlm();
 // Same two values the browser uses. When both are set, sign-in is required.
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL?.trim();
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY?.trim();
@@ -115,21 +116,6 @@ interface RawReport {
   sources: VerifiedSource[];
 }
 
-function getGenAIClient(): GoogleGenAI {
-  const apiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured on the server.");
-  }
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
-}
-
 function isFatalApiError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   const status =
@@ -155,7 +141,7 @@ function isTransientError(err: unknown): boolean {
   if (status && [500, 502, 503, 504].includes(status)) {
     return true;
   }
-  return /UNAVAILABLE|503|502|504|high demand|overloaded|ETIMEDOUT|ECONNRESET/i.test(
+  return /UNAVAILABLE|503|502|504|high demand|overloaded|ETIMEDOUT|ECONNRESET|valid JSON|empty response/i.test(
     message
   );
 }
@@ -194,22 +180,33 @@ function formatApiError(err: unknown): string {
   }
 
   if (/API_KEY_INVALID|PERMISSION_DENIED|UNAUTHENTICATED|403|401/i.test(message)) {
-    return "Gemini API key is missing or invalid. Check GEMINI_API_KEY in Settings > Secrets.";
+    return `${llm.label} rejected the API key. Check ${llm.keyVariable} on the server.`;
   }
   if (/RESOURCE_EXHAUSTED|429/i.test(message)) {
-    return "Gemini API rate limit or quota exceeded. Wait a moment and try again.";
+    return `${llm.label} rate limit or quota reached. Wait a moment and try again.`;
   }
   if (/NOT_FOUND|404/i.test(message)) {
-    return `Requested Gemini model (${MODEL_NAME}) was not found or is unavailable.`;
+    return `The model "${llm.model}" was not found or is unavailable on ${llm.label}.`;
   }
   if (/UNAVAILABLE|503|high demand/i.test(message)) {
-    return "Gemini is temporarily overloaded right now. Please click Retry in a few seconds.";
+    return `${llm.label} is overloaded right now. Click Retry in a few seconds.`;
   }
   return message || "Unexpected error during analysis.";
 }
 
-function clamp(num: number, min: number, max: number): number {
-  if (!Number.isFinite(num)) return min;
+// Open models do not always honour the schema, so never trust a field's type.
+function str(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function strList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map(str).filter(Boolean);
+}
+
+function clamp(value: unknown, min: number, max: number): number {
+  const num = typeof value === "string" ? Number(value) : (value as number);
+  if (typeof num !== "number" || !Number.isFinite(num)) return min;
   return Math.min(max, Math.max(min, num));
 }
 
@@ -243,7 +240,7 @@ function sendSseEvent(res: Response, event: string, data: unknown): void {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-const CLARITY_SCHEMA = {
+const CLARITY_SCHEMA: SchemaNode = {
   type: Type.OBJECT,
   properties: {
     is_clear: {
@@ -260,7 +257,7 @@ const CLARITY_SCHEMA = {
   required: ["is_clear", "clarifying_question"],
 };
 
-const REPORT_SCHEMA = {
+const REPORT_SCHEMA: SchemaNode = {
   type: Type.OBJECT,
   properties: {
     idea_title: {
@@ -418,8 +415,10 @@ async function startServer(): Promise<void> {
   app.get("/api/health", (_req: Request, res: Response) => {
     res.json({
       ok: true,
-      model: MODEL_NAME,
-      apiKeyConfigured: Boolean(process.env.GEMINI_API_KEY?.trim()),
+      provider: llm.label,
+      model: llm.model,
+      apiKeyConfigured: llm.keyConfigured,
+      webSearch: Boolean(llm.research),
       signInRequired: Boolean(supabaseAuth),
     });
   });
@@ -494,30 +493,22 @@ async function startServer(): Promise<void> {
     res.flushHeaders();
 
     try {
-      const ai = getGenAIClient();
-
       // Phase 1: Problem — check if a single clarifying question is needed (only on initial submission)
       sendSseEvent(res, "phase", { phaseIndex: 0, phaseName: "Problem" });
 
       if (!clarification) {
-        const clarityResponse = await withRetry(() =>
-          ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: `Evaluate whether this startup idea has enough substance to judge, or if it is too vague (missing a clear user, concrete problem, AND plausible way to make money).\n\nFounder input:\n"""\n${rawIdea}\n"""`,
-            config: {
-              systemInstruction:
-                "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question.",
-              responseMimeType: "application/json",
-              responseSchema: CLARITY_SCHEMA,
-              thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-              seed: 42,
-            },
+        const clarity = (await withRetry(() =>
+          llm.generateJson({
+            system:
+              "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question.",
+            prompt: `Evaluate whether this startup idea has enough substance to judge, or if it is too vague (missing a clear user, concrete problem, AND plausible way to make money).\n\nFounder input:\n"""\n${rawIdea}\n"""`,
+            schema: CLARITY_SCHEMA,
+            schemaName: "clarity_check",
+            effort: "low",
           })
-        );
+        )) as Partial<ClarityCheckResult> | null;
 
-        const clarityText = (clarityResponse.text ?? "").trim();
-        if (clarityText) {
-          const clarity = JSON.parse(clarityText) as ClarityCheckResult;
+        if (clarity && typeof clarity === "object") {
           if (!clarity.is_clear && clarity.clarifying_question?.trim()) {
             sendSseEvent(res, "clarification", {
               question: clarity.clarifying_question.trim(),
@@ -540,48 +531,31 @@ async function startServer(): Promise<void> {
 
       let researchNotes = "";
       const verifiedSources: VerifiedSource[] = [];
-      const seenUrls = new Set<string>();
       const preGroundingFlags: string[] = [];
 
+      sendSseEvent(res, "phase", { phaseIndex: 3, phaseName: "Competition" });
+
+      const research = llm.research;
       try {
-        sendSseEvent(res, "phase", {
-          phaseIndex: 3,
-          phaseName: "Competition",
-        });
-
-        const researchResponse = await withRetry(() =>
-          ai.models.generateContent({
-            model: MODEL_NAME,
-            contents: `Research the market reality, existing competitors, pricing benchmarks, and demand signals for this startup idea. Only report facts observed in web search results. Identify real competing products/companies with what they actually do.\n\nStartup idea:\n"""\n${combinedIdeaContext}\n"""`,
-            config: {
-              systemInstruction:
-                "You are a factual market researcher for FORGE. Use Google Search to verify competitors, pricing, and market demand. Never invent competitors, user numbers, or revenue figures. Explicitly note gaps where search returns no hard data.",
-              tools: [{ googleSearch: {} }],
-              seed: 42,
-            },
-          })
-        );
-
-        researchNotes = (researchResponse.text ?? "").trim();
-        const chunks =
-          researchResponse.candidates?.[0]?.groundingMetadata?.groundingChunks ??
-          [];
-
-        for (const chunk of chunks) {
-          const uri = chunk.web?.uri?.trim();
-          if (uri && !seenUrls.has(uri)) {
-            seenUrls.add(uri);
-            verifiedSources.push({
-              title: chunk.web?.title?.trim() || uri,
-              url: uri,
-            });
-          }
-        }
-
-        if (verifiedSources.length === 0) {
+        if (!research) {
           preGroundingFlags.push(
-            "Could not verify competitors: live web search returned no source URLs."
+            "Could not verify competitors: live web search is not set up for this model. Nothing in this report was checked against the web."
           );
+        } else {
+          const result = await withRetry(() =>
+            research(
+              "You are a factual market researcher for FORGE. Use Google Search to verify competitors, pricing, and market demand. Never invent competitors, user numbers, or revenue figures. Explicitly note gaps where search returns no hard data.",
+              `Research the market reality, existing competitors, pricing benchmarks, and demand signals for this startup idea. Only report facts observed in web search results. Identify real competing products/companies with what they actually do.\n\nStartup idea:\n"""\n${combinedIdeaContext}\n"""`
+            )
+          );
+          researchNotes = result.notes;
+          verifiedSources.push(...result.sources);
+
+          if (verifiedSources.length === 0) {
+            preGroundingFlags.push(
+              "Could not verify competitors: live web search returned no source URLs."
+            );
+          }
         }
       } catch (researchErr) {
         // A quota error here usually means the key's plan does not include
@@ -595,7 +569,7 @@ async function startServer(): Promise<void> {
         }
         preGroundingFlags.push(
           quotaError
-            ? "Could not verify competitors: live web search is not available on this Gemini API key's plan. Nothing in this report was checked against the web."
+            ? "Could not verify competitors: live web search is not available on this API key's plan. Nothing in this report was checked against the web."
             : `Could not verify competitors (${formatApiError(researchErr)}).`
         );
       }
@@ -644,19 +618,21 @@ RULES:
 - Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
 - grounding_flags: list every important claim, competitor figure, market size, or assumption that could not be verified from the retrieved sources.`;
 
-      const analysisResponse = await withRetry(() =>
-        ai.models.generateContent({
-          model: MODEL_NAME,
-          contents: analysisPrompt,
-          config: {
-            systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
-            responseMimeType: "application/json",
-            responseSchema: REPORT_SCHEMA,
-            thinkingConfig: { thinkingLevel: ThinkingLevel.MEDIUM },
-            seed: 42,
-          },
+      const parsed = (await withRetry(() =>
+        llm.generateJson({
+          system: ANALYSIS_SYSTEM_INSTRUCTION,
+          prompt: analysisPrompt,
+          schema: REPORT_SCHEMA,
+          schemaName: "forge_report",
+          effort: "medium",
         })
-      );
+      )) as Partial<RawReport> | null;
+
+      if (!parsed || typeof parsed !== "object" || !parsed.idea_score) {
+        throw new Error(
+          "The model returned a report that could not be read. Click Retry."
+        );
+      }
 
       if (clientDisconnected) return;
 
@@ -665,23 +641,16 @@ RULES:
         phaseName: "Execution Risk",
       });
 
-      const rawJson = (analysisResponse.text ?? "").trim();
-      if (!rawJson) {
-        throw new Error("Model returned an empty analysis response.");
-      }
-
-      const parsed = JSON.parse(rawJson) as RawReport;
-
       // Enforce strict grounding integrity on server output
       const finalFlags = new Set<string>(
-        [...preGroundingFlags, ...(parsed.grounding_flags ?? [])]
+        [...preGroundingFlags, ...strList(parsed.grounding_flags)]
           .map((f) => f.trim())
           .filter(Boolean)
       );
 
       const sanitizedCompetitors: ReportCompetitor[] = [];
-      for (const comp of parsed.competitors ?? []) {
-        const name = (comp.name ?? "").trim();
+      for (const comp of Array.isArray(parsed.competitors) ? parsed.competitors : []) {
+        const name = str(comp?.name);
         if (!name) continue;
         const source = Number.isInteger(comp.source_index)
           ? verifiedSources[comp.source_index - 1]
@@ -689,13 +658,10 @@ RULES:
         if (source) {
           sanitizedCompetitors.push({
             name,
-            what_they_do: (comp.what_they_do ?? "").trim(),
+            what_they_do: str(comp.what_they_do),
             source_url: source.url,
           });
-        } else if (verifiedSources.length === 0) {
-          // Grounding failed or returned zero sources; do not emit unverified competitor claims
-          finalFlags.add("Could not verify competitors");
-        } else {
+        } else if (verifiedSources.length > 0) {
           finalFlags.add(
             `Could not verify a source for competitor "${name}"; it was left out.`
           );
@@ -712,8 +678,8 @@ RULES:
       }
 
       const report = {
-        idea_title: (parsed.idea_title ?? "").trim().slice(0, 80),
-        idea_summary: (parsed.idea_summary ?? "").trim(),
+        idea_title: str(parsed.idea_title).slice(0, 80),
+        idea_summary: str(parsed.idea_summary),
         idea_score: {
           overall: Math.round(clamp(parsed.idea_score?.overall ?? 0, 0, 100)),
           breakdown: {
@@ -733,31 +699,31 @@ RULES:
               clamp(parsed.idea_score?.breakdown?.differentiation ?? 0, 0, 10).toFixed(1)
             ),
           },
-          confidence: parsed.idea_score?.confidence ?? "low",
-          rationale: (parsed.idea_score?.rationale ?? "").trim(),
+          confidence: (["low", "medium", "high"] as const).find(
+            (c) => c === parsed.idea_score?.confidence
+          ) ?? "low",
+          rationale: str(parsed.idea_score?.rationale),
         },
         swot: {
-          strengths: (parsed.swot?.strengths ?? []).filter(Boolean),
-          weaknesses: (parsed.swot?.weaknesses ?? []).filter(Boolean),
-          opportunities: (parsed.swot?.opportunities ?? []).filter(Boolean),
-          threats: (parsed.swot?.threats ?? []).filter(Boolean),
+          strengths: strList(parsed.swot?.strengths),
+          weaknesses: strList(parsed.swot?.weaknesses),
+          opportunities: strList(parsed.swot?.opportunities),
+          threats: strList(parsed.swot?.threats),
         },
         competitors: sanitizedCompetitors,
         blueprint: {
-          problem: (parsed.blueprint?.problem ?? "").trim(),
-          target_user: (parsed.blueprint?.target_user ?? "").trim(),
-          solution: (parsed.blueprint?.solution ?? "").trim(),
-          business_model: (parsed.blueprint?.business_model ?? "").trim(),
-          key_risks: (parsed.blueprint?.key_risks ?? []).filter(Boolean),
-          validate_next: (parsed.blueprint?.validate_next ?? []).filter(Boolean),
+          problem: str(parsed.blueprint?.problem),
+          target_user: str(parsed.blueprint?.target_user),
+          solution: str(parsed.blueprint?.solution),
+          business_model: str(parsed.blueprint?.business_model),
+          key_risks: strList(parsed.blueprint?.key_risks),
+          validate_next: strList(parsed.blueprint?.validate_next),
         },
         business_plan: {
-          tam_estimate: (parsed.business_plan?.tam_estimate ?? "").trim(),
-          assumptions: (parsed.business_plan?.assumptions ?? []).filter(Boolean),
-          go_to_market: (parsed.business_plan?.go_to_market ?? "").trim(),
-          pricing_hypothesis: (
-            parsed.business_plan?.pricing_hypothesis ?? ""
-          ).trim(),
+          tam_estimate: str(parsed.business_plan?.tam_estimate),
+          assumptions: strList(parsed.business_plan?.assumptions),
+          go_to_market: str(parsed.business_plan?.go_to_market),
+          pricing_hypothesis: str(parsed.business_plan?.pricing_hypothesis),
         },
         grounding_flags: Array.from(finalFlags),
         sources: verifiedSources,
