@@ -1,6 +1,7 @@
-import { AlertCircle, ArrowRight, RotateCcw, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
 import { sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { LanguageToggle, useI18n } from "../lib/i18n";
+import type { NexusJob } from "../lib/nexus";
 
 interface InputScreenProps {
   rawIdea: string;
@@ -26,6 +27,9 @@ interface InputScreenProps {
   onOpenProfile: () => void;
   /** Shown until the founder has told FORGE something about themselves. */
   showProfileNudge: boolean;
+  /** Nexus jobs still working or waiting for an answer. */
+  activeJobs: NexusJob[];
+  onAnswerJob: (job: NexusJob) => void;
 }
 
 export function InputScreen({
@@ -48,6 +52,8 @@ export function InputScreen({
   onSignOut,
   onOpenProfile,
   showProfileNudge,
+  activeJobs,
+  onAnswerJob,
 }: InputScreenProps) {
   const { t } = useI18n();
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -102,6 +108,63 @@ export function InputScreen({
       </header>
 
       <main>
+        {activeJobs.length > 0 && (
+          <section
+            aria-labelledby="nexus-heading"
+            className="mb-6 rounded-2xl border border-[#E5E4DF] bg-white p-5"
+          >
+            <h2 id="nexus-heading" className="text-sm font-semibold text-[#18181B]">
+              {t.nexusHeading}
+            </h2>
+            <ul className="mt-3 divide-y divide-[#ECEBE6]">
+              {activeJobs.map((job) => {
+                const label = (job.input?.rawIdea || job.input?.ideaTitle || "").slice(0, 90);
+                if (job.status === "needs_input") {
+                  return (
+                    <li
+                      key={job.id}
+                      className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <MessageCircleQuestion className="mt-0.5 h-4 w-4 shrink-0 text-[#C2410C]" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-[#C2410C]">{t.nexusQuestion}</p>
+                          <p className="text-sm text-[#18181B]">{job.result?.question}</p>
+                          <p className="truncate text-xs text-[#6B6B65]">{label}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onAnswerJob(job)}
+                        className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
+                      >
+                        {t.answer}
+                      </button>
+                    </li>
+                  );
+                }
+                return (
+                  <li key={job.id} className="flex items-start gap-2.5 py-3">
+                    <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin text-[#F97316]" />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-[#18181B]">
+                        {job.kind === "sprint" ? t.nexusSprinting(label) : t.nexusAnalyzing(label)}
+                      </p>
+                      <p className="text-xs text-[#6B6B65]">
+                        {job.error === "quota"
+                          ? t.nexusWaiting
+                          : job.kind === "sprint"
+                          ? t.phaseRunning
+                          : t.nexusStep(job.step)}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
         <form
           onSubmit={handleFormSubmit}
           className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"

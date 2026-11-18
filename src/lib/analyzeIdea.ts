@@ -62,11 +62,26 @@ export interface ForgeReportData {
   };
   /** FORGE's call on the idea. Missing on reports made before decisions existed. */
   decision?: ForgeDecision;
+  /** The Skeptic's check of the report against its sources. Missing on older reports. */
+  skeptic?: SkepticSummary | null;
   grounding_flags: string[];
   sources: ForgeSource[];
 }
 
 export type DecisionCall = "go" | "pivot" | "kill";
+
+export interface SkepticSummary {
+  /** Competitors and claims checked against the sources. */
+  checked: number;
+  /** How many of those the sources backed. */
+  supported: number;
+  /** Competitors removed because their cited source did not back them. */
+  removed: string[];
+  /** Claims no source supported. */
+  unsupported: string[];
+  /** The strongest argument against the idea. */
+  counterargument: string;
+}
 
 export interface ForgeDecision {
   call: DecisionCall;
@@ -377,11 +392,11 @@ export interface BuildSprintOptions {
   language?: Language;
 }
 
-/** Asks FORGE for a 7-day launch sprint based on the idea's latest report. */
-export async function buildSprintPlan(
+/** The request body for a sprint, built from the idea's latest report. */
+export function sprintRequest(
   idea: Idea,
-  options: BuildSprintOptions = {},
-): Promise<SprintPlan> {
+  options: Pick<BuildSprintOptions, "profile" | "language"> = {},
+): Record<string, unknown> {
   const latest = idea.versions[0];
   const { data } = latest;
   const decision = data.decision
@@ -398,19 +413,28 @@ export async function buildSprintPlan(
   const doneTasks = [
     ...idea.experiments.filter((e) => e.status === "done").map((e) => e.title),
   ];
+  return {
+    mode: "sprint",
+    ideaId: idea.id,
+    ideaTitle: idea.title,
+    ideaSummary: data.idea_summary || latest.rawIdea,
+    decision,
+    blueprint,
+    validateNext: data.blueprint.validate_next,
+    doneTasks,
+    profile: options.profile ?? undefined,
+    language: options.language ?? "en",
+  };
+}
+
+/** Asks FORGE for a 7-day launch sprint based on the idea's latest report. */
+export async function buildSprintPlan(
+  idea: Idea,
+  options: BuildSprintOptions = {},
+): Promise<SprintPlan> {
   return withStreamRetry(() =>
     streamJob<SprintPlan>(
-      {
-        mode: "sprint",
-        ideaTitle: idea.title,
-        ideaSummary: data.idea_summary || latest.rawIdea,
-        decision,
-        blueprint,
-        validateNext: data.blueprint.validate_next,
-        doneTasks,
-        profile: options.profile ?? undefined,
-        language: options.language ?? "en",
-      },
+      sprintRequest(idea, options),
       options.accessToken,
       180_000,
       ({ name, payload }) => {
