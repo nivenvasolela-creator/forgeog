@@ -826,11 +826,21 @@ const SKEPTIC_SCHEMA: SchemaNode = {
     strongest_objection: {
       type: "STRING",
       description:
-        "The single strongest argument against this idea, in two plain sentences, written to the founder.",
+        "The single strongest argument against this idea, in two plain sentences, written to the founder. Use only facts the extracts state, and do not mention any competitor you marked unsupported.",
     },
   },
   required: ["competitor_checks", "claim_checks", "strongest_objection"],
 };
+
+/** Drops sentences that mention any of the given names (rejected competitors). */
+function withoutNames(text: string, names: string[]): string {
+  const lowered = names.map((n) => n.toLowerCase()).filter(Boolean);
+  if (lowered.length === 0) return text;
+  return (text.match(/[^.!?]+[.!?]*/g) ?? [])
+    .filter((sentence) => !lowered.some((n) => sentence.toLowerCase().includes(n)))
+    .join("")
+    .trim();
+}
 
 /**
  * Skeptic agent: re-reads the Scout's source extracts, removes competitors
@@ -886,7 +896,7 @@ IDEA:
 ${combinedContext(input)}
 """
 
-Check every competitor against the extract of the source it cites. Then pick up to 8 specific factual claims from the report text and judge each against the extracts. Finally give the strongest objection to the idea.`,
+Check every competitor against the extract of the source it cites. Then pick up to 8 specific factual claims from the report text and judge each against the extracts. Finally give the strongest objection to the idea, built only on facts the extracts state; never cite a competitor you just marked unsupported.`,
       schema: SKEPTIC_SCHEMA,
       schemaName: "skeptic_check",
       effort: "medium",
@@ -940,7 +950,7 @@ Check every competitor against the extract of the source it cites. Then pick up 
       supported: supportedCount,
       removed,
       unsupported,
-      counterargument: str(parsed?.strongest_objection).slice(0, 600),
+      counterargument: withoutNames(str(parsed?.strongest_objection), removed).slice(0, 600),
     },
   };
 }
