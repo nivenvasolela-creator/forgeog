@@ -196,16 +196,9 @@ function cleanPlan(raw: unknown): SprintPlan {
   };
 }
 
-/** Builds the sprint and reports it through emit as one "sprint" event, or "error". */
-export async function runSprint(
-  input: SprintInput,
-  deps: { llm: Llm; isCancelled: () => boolean },
-  emit: Emit
-): Promise<void> {
-  const { llm } = deps;
-  try {
-    emit("phase", { phaseIndex: 0, phaseName: "Planning" });
-    const prompt = `Build a 7-day launch sprint for this founder and idea.
+/** Builds the sprint plan. Throws when no usable plan comes back. */
+export async function buildSprint(input: SprintInput, llm: Llm): Promise<SprintPlan> {
+  const prompt = `Build a 7-day launch sprint for this founder and idea.
 
 IDEA: ${input.ideaTitle}
 ${input.ideaSummary}
@@ -232,34 +225,47 @@ RULES:
 - 1 or 2 tasks per day. Each task gets 3-4 short plain steps and, where useful, one complete material under 70 words, ready to copy.
 - Keep every sentence short. Do not repeat the same material on different days.`;
 
-    // Open models sometimes stop after a day or two; ask again and keep the
-    // most complete plan.
-    let best: SprintPlan | null = null;
-    const started = Date.now();
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (attempt > 0 && Date.now() - started > RETRY_BUDGET_MS) break;
-      const reminder =
-        attempt === 0
-          ? ""
-          : `\n\nIMPORTANT: your previous answer only covered ${best?.days.length ?? 0} day(s). Return all 7 days, numbered 1 to 7.`;
-      const raw = await withRetry(() =>
-        llm.generateJson({
-          system: SPRINT_SYSTEM + languageRule(input.language),
-          prompt: prompt + reminder,
-          schema: SPRINT_SCHEMA,
-          schemaName: "launch_sprint",
-          effort: "medium",
-        })
-      );
-      if (deps.isCancelled()) return;
-      const plan = cleanPlan(raw);
-      if (!best || plan.days.length > best.days.length) best = plan;
-      if (best.days.length >= MIN_DAYS) break;
-    }
-    if (!best || best.days.length === 0) {
-      throw new Error("The model returned a plan that could not be read. Click Retry.");
-    }
-    emit("sprint", { plan: best });
+  // Open models sometimes stop after a day or two; ask again and keep the
+  // most complete plan.
+  let best: SprintPlan | null = null;
+  const started = Date.now();
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    if (attempt > 0 && Date.now() - started > RETRY_BUDGET_MS) break;
+    const reminder =
+      attempt === 0
+        ? ""
+        : `\n\nIMPORTANT: your previous answer only covered ${best?.days.length ?? 0} day(s). Return all 7 days, numbered 1 to 7.`;
+    const raw = await withRetry(() =>
+      llm.generateJson({
+        system: SPRINT_SYSTEM + languageRule(input.language),
+        prompt: prompt + reminder,
+        schema: SPRINT_SCHEMA,
+        schemaName: "launch_sprint",
+        effort: "medium",
+      })
+    );
+    const plan = cleanPlan(raw);
+    if (!best || plan.days.length > best.days.length) best = plan;
+    if (best.days.length >= MIN_DAYS) break;
+  }
+  if (!best || best.days.length === 0) {
+    throw new Error("The model returned a plan that could not be read. Click Retry.");
+  }
+  return best;
+}
+
+/** Builds the sprint and reports it through emit as one "sprint" event, or "error". */
+export async function runSprint(
+  input: SprintInput,
+  deps: { llm: Llm; isCancelled: () => boolean },
+  emit: Emit
+): Promise<void> {
+  const { llm } = deps;
+  try {
+    emit("phase", { phaseIndex: 0, phaseName: "Planning" });
+    const plan = await buildSprint(input, llm);
+    if (deps.isCancelled()) return;
+    emit("sprint", { plan });
   } catch (err) {
     emit("error", { error: formatApiError(err, llm) });
   }

@@ -504,101 +504,103 @@ export interface AnalysisDeps {
   isCancelled: () => boolean;
 }
 
-/**
- * Runs one analysis and reports progress through emit: "phase" events, then
- * exactly one of "clarification", "report" or "error".
- */
-export async function runAnalysis(
-  input: AnalyzeInput,
-  deps: AnalysisDeps,
-  emit: Emit
-): Promise<void> {
-  const { llm } = deps;
-  const { rawIdea, clarification, evidenceLines, profileLines, language } = input;
-  const langRule = languageRule(language);
-  try {
-  // Phase 1: Problem — check if a single clarifying question is needed (only on initial submission)
-  emit("phase", { phaseIndex: 0, phaseName: "Problem" });
+// ---------------------------------------------------------------------------
+// The agents. Each is one short step so a job queue can run them one at a
+// time (hosted functions stop after 150 s), and runAnalysis chains them for
+// the streaming API.
+// ---------------------------------------------------------------------------
 
-  if (!clarification) {
-    const clarity = (await withRetry(() =>
-      llm.generateJson({
-        system:
-          "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question." + langRule,
-        prompt: `Evaluate whether this startup idea has enough substance to judge, or if it is too vague (missing a clear user, concrete problem, AND plausible way to make money).\n\nFounder input:\n"""\n${rawIdea}\n"""`,
-        schema: CLARITY_SCHEMA,
-        schemaName: "clarity_check",
-        effort: "low",
-      })
-    )) as Partial<ClarityCheckResult> | null;
+export interface ScoutResult {
+  researchNotes: string;
+  sources: VerifiedSource[];
+  flags: string[];
+}
 
-    if (clarity && typeof clarity === "object") {
-      if (!clarity.is_clear && clarity.clarifying_question?.trim()) {
-        emit("clarification", {
-          question: clarity.clarifying_question.trim(),
-        });
-        return;
-      }
-    }
+export interface SkepticSummary {
+  /** Claims and competitors the Skeptic checked against the sources. */
+  checked: number;
+  supported: number;
+  /** Competitors removed because their source did not back them. */
+  removed: string[];
+  /** Claims the sources did not support (also added to grounding_flags). */
+  unsupported: string[];
+  /** The strongest argument against the idea. */
+  counterargument: string;
+}
+
+export type ForgeReport = ReturnType<typeof buildReport>;
+
+function combinedContext(input: AnalyzeInput): string {
+  return input.clarification
+    ? `Original idea:\n${input.rawIdea}\n\nFounder clarification:\n${input.clarification}`
+    : input.rawIdea;
+}
+
+/** Clarity agent: returns one clarifying question when the idea is too vague, else null. */
+export async function stepClarity(input: AnalyzeInput, llm: Llm): Promise<string | null> {
+  if (input.clarification) return null;
+  const clarity = (await withRetry(() =>
+    llm.generateJson({
+      system:
+        "You triage startup ideas for FORGE. Only mark is_clear as false if the input is genuinely too vague to evaluate because it lacks a clear user, problem, or way to make money (e.g., a generic slogan or a few vague words). If it has enough to evaluate, mark is_clear true with an empty clarifying_question. If false, ask exactly ONE short, direct clarifying question." +
+        languageRule(input.language),
+      prompt: `Evaluate whether this startup idea has enough substance to judge, or if it is too vague (missing a clear user, concrete problem, AND plausible way to make money).\n\nFounder input:\n"""\n${input.rawIdea}\n"""`,
+      schema: CLARITY_SCHEMA,
+      schemaName: "clarity_check",
+      effort: "low",
+    })
+  )) as Partial<ClarityCheckResult> | null;
+  if (clarity && typeof clarity === "object" && !clarity.is_clear) {
+    const question = clarity.clarifying_question?.trim();
+    if (question) return question;
   }
+  return null;
+}
 
-  if (deps.isCancelled()) return;
-
-  // Phases 2-4: Customer, Market, Competition — Google Search grounded research
-  emit("phase", { phaseIndex: 1, phaseName: "Customer" });
-  emit("phase", { phaseIndex: 2, phaseName: "Market" });
-
-  const combinedIdeaContext = clarification
-    ? `Original idea:\n${rawIdea}\n\nFounder clarification:\n${clarification}`
-    : rawIdea;
-
+/** Scout agent: finds real pages about competitors, pricing and demand. */
+export async function stepScout(
+  input: AnalyzeInput,
+  deps: { llm: Llm; search: WebSearch | null }
+): Promise<ScoutResult> {
+  const { llm } = deps;
+  const context = combinedContext(input);
+  const sources: VerifiedSource[] = [];
+  const flags: string[] = [];
   let researchNotes = "";
-  const verifiedSources: VerifiedSource[] = [];
-  const preGroundingFlags: string[] = [];
-
-  emit("phase", { phaseIndex: 3, phaseName: "Competition" });
-
   const research = llm.research;
   try {
     if (deps.search) {
       // Location steers the queries towards the founder's own market.
-      const location = profileLines.filter((l) => /^- (Country|City):/.test(l));
+      const location = input.profileLines.filter((l) => /^- (Country|City):/.test(l));
       const hits = await searchTheWeb(
         deps.search,
         llm,
         location.length > 0
-          ? `${combinedIdeaContext}\n\nFounder is based in:\n${location.join("\n")}`
-          : combinedIdeaContext
+          ? `${context}\n\nFounder is based in:\n${location.join("\n")}`
+          : context
       );
-      for (const hit of hits) {
-        verifiedSources.push({ title: hit.title, url: hit.url });
-      }
+      for (const hit of hits) sources.push({ title: hit.title, url: hit.url });
       researchNotes = hits
         .map((hit, idx) => `${idx + 1}. ${hit.title}\n   ${hit.snippet || "(no extract)"}`)
         .join("\n");
       if (hits.length === 0) {
-        preGroundingFlags.push(
-          "Could not verify competitors: live web search returned no results."
-        );
+        flags.push("Could not verify competitors: live web search returned no results.");
       }
     } else if (!research) {
-      preGroundingFlags.push(
+      flags.push(
         "Could not verify competitors: live web search is not set up for this model. Nothing in this report was checked against the web."
       );
     } else {
       const result = await withRetry(() =>
         research(
           "You are a factual market researcher for FORGE. Use Google Search to verify competitors, pricing, and market demand. Never invent competitors, user numbers, or revenue figures. Explicitly note gaps where search returns no hard data.",
-          `Research the market reality, existing competitors, pricing benchmarks, and demand signals for this startup idea. Only report facts observed in web search results. Identify real competing products/companies with what they actually do.\n\nStartup idea:\n"""\n${combinedIdeaContext}\n"""`
+          `Research the market reality, existing competitors, pricing benchmarks, and demand signals for this startup idea. Only report facts observed in web search results. Identify real competing products/companies with what they actually do.\n\nStartup idea:\n"""\n${context}\n"""`
         )
       );
       researchNotes = result.notes;
-      verifiedSources.push(...result.sources);
-
-      if (verifiedSources.length === 0) {
-        preGroundingFlags.push(
-          "Could not verify competitors: live web search returned no source URLs."
-        );
+      sources.push(...result.sources);
+      if (sources.length === 0) {
+        flags.push("Could not verify competitors: live web search returned no source URLs.");
       }
     }
   } catch (researchErr) {
@@ -615,7 +617,7 @@ export async function runAnalysis(
     if (isFatalApiError(researchErr) && !quotaError && !fromSearch) {
       throw researchErr;
     }
-    preGroundingFlags.push(
+    flags.push(
       fromSearch
         ? "Could not verify competitors: the web search service failed. Nothing in this report was checked against the web."
         : quotaError
@@ -623,84 +625,14 @@ export async function runAnalysis(
         : `Could not verify competitors (${formatApiError(researchErr, llm)}).`
     );
   }
+  return { researchNotes, sources, flags };
+}
 
-  if (deps.isCancelled()) return;
-
-  // Phases 5-6: Business Model, Execution Risk — Structured JSON analysis
-  emit("phase", {
-    phaseIndex: 4,
-    phaseName: "Business Model",
-  });
-
-  const sourcesBlock =
-    verifiedSources.length > 0
-      ? verifiedSources
-          .map((s, idx) => `${idx + 1}. ${s.title} — ${s.url}`)
-          .join("\n")
-      : "NONE (no verified search sources were retrieved)";
-
-  const analysisPrompt = `Analyze this startup idea and return the structured FORGE report.
-
-FOUNDER INPUT:
-"""
-${combinedIdeaContext}
-"""
-
-GROUNDED RESEARCH NOTES (web search results; the only verified facts):
-"""
-${researchNotes || "No grounded research notes were retrieved."}
-"""
-
-VERIFIED SOURCES FROM GOOGLE SEARCH (numbered):
-${sourcesBlock}
-
-EXPERIMENTS THE FOUNDER REPORTS HAVING RUN (self-reported, not independently verified):
-${evidenceLines.length > 0 ? evidenceLines.join("\n") : "None reported."}
-
-FOUNDER PROFILE (self-reported by the founder):
-${profileBlock(profileLines)}
-
-PRE-EXISTING GROUNDING FLAGS:
-${preGroundingFlags.length > 0 ? preGroundingFlags.join("\n") : "None"}
-
-RULES:
-- Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
-- founder_fit: judge it against the FOUNDER PROFILE (skills, background, time, money, location) and anything the founder wrote about themselves. If neither says anything about the founder, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
-- Tailor go_to_market, pricing and validate_next to the founder's country, city, budget and time when the profile gives them. A founder with little money needs steps that cost little or nothing.
-- decision: make one clear call. Use "go" only when the idea is worth executing now (roughly overall >= 60 with no fatal flaw). Use "kill" when the core problem or market looks fundamentally weak. Otherwise "pivot". For pivot or kill, give 2-3 concrete alternative ideas built on what is strongest here; for go, give an empty pivots array.
-- Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
-- Founder experiments: treat reported results as real but self-reported evidence. A result that went against the idea must lower the relevant scores and appear in weaknesses or key_risks. A supporting result only raises scores as far as its notes give specifics (who, how many, what they did or paid); vague or missing notes earn little. Say in the rationale which results moved the score. Add one grounding_flags entry stating that experiment results are self-reported. Do not repeat a finished experiment in validate_next; suggest what to test next instead.
-- Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
-- grounding_flags: list every important claim, competitor figure, market size, or assumption that could not be verified from the retrieved sources.`;
-
-  const parsed = (await withRetry(() =>
-    llm.generateJson({
-      system: ANALYSIS_SYSTEM_INSTRUCTION + langRule,
-      prompt: analysisPrompt,
-      schema: REPORT_SCHEMA,
-      schemaName: "forge_report",
-      effort: "medium",
-    })
-  )) as Partial<RawReport> | null;
-
-  if (!parsed || typeof parsed !== "object" || !parsed.idea_score) {
-    throw new Error(
-      "The model returned a report that could not be read. Click Retry."
-    );
-  }
-
-  if (deps.isCancelled()) return;
-
-  emit("phase", {
-    phaseIndex: 5,
-    phaseName: "Execution Risk",
-  });
-
+function buildReport(parsed: Partial<RawReport>, scout: ScoutResult) {
+  const verifiedSources = scout.sources;
   // Enforce strict grounding integrity on server output
   const finalFlags = new Set<string>(
-    [...preGroundingFlags, ...strList(parsed.grounding_flags)]
-      .map((f) => f.trim())
-      .filter(Boolean)
+    [...scout.flags, ...strList(parsed.grounding_flags)].map((f) => f.trim()).filter(Boolean)
   );
 
   const sanitizedCompetitors: ReportCompetitor[] = [];
@@ -717,23 +649,19 @@ RULES:
         source_url: source.url,
       });
     } else if (verifiedSources.length > 0) {
-      finalFlags.add(
-        `Could not verify a source for competitor "${name}"; it was left out.`
-      );
+      finalFlags.add(`Could not verify a source for competitor "${name}"; it was left out.`);
     }
   }
 
   if (
     verifiedSources.length === 0 &&
-    !Array.from(finalFlags).some((f) =>
-      f.toLowerCase().includes("could not verify competitors")
-    )
+    !Array.from(finalFlags).some((f) => f.toLowerCase().includes("could not verify competitors"))
   ) {
     finalFlags.add("Could not verify competitors");
   }
 
   const overallScore = Math.round(clamp(parsed.idea_score?.overall ?? 0, 0, 100));
-  const report = {
+  return {
     idea_title: str(parsed.idea_title).slice(0, 80),
     idea_summary: str(parsed.idea_summary),
     idea_score: {
@@ -757,7 +685,7 @@ RULES:
       },
       confidence: (["low", "medium", "high"] as const).find(
         (c) => c === parsed.idea_score?.confidence
-      ) ?? "low",
+      ) ?? ("low" as "low" | "medium" | "high"),
       rationale: str(parsed.idea_score?.rationale),
     },
     swot: {
@@ -782,17 +710,312 @@ RULES:
       pricing_hypothesis: str(parsed.business_plan?.pricing_hypothesis),
     },
     decision: {
-      call: (["go", "pivot", "kill"] as const).find(
-        (c) => c === parsed.decision?.call
-      ) ?? (overallScore >= 60 ? "go" : overallScore >= 30 ? "pivot" : "kill"),
+      call:
+        (["go", "pivot", "kill"] as const).find((c) => c === parsed.decision?.call) ??
+        ((overallScore >= 60 ? "go" : overallScore >= 30 ? "pivot" : "kill") as
+          | "go"
+          | "pivot"
+          | "kill"),
       reason: str(parsed.decision?.reason),
       pivots: strList(parsed.decision?.pivots).slice(0, 3),
     },
     grounding_flags: Array.from(finalFlags),
     sources: verifiedSources,
+    skeptic: null as SkepticSummary | null,
   };
+}
 
-  emit("report", { report });
+/** Analyst agent: scores the idea and writes the report from the Scout's findings. */
+export async function stepAnalyst(
+  input: AnalyzeInput,
+  scout: ScoutResult,
+  llm: Llm
+): Promise<ForgeReport> {
+  const sourcesBlock =
+    scout.sources.length > 0
+      ? scout.sources.map((s, idx) => `${idx + 1}. ${s.title} — ${s.url}`).join("\n")
+      : "NONE (no verified search sources were retrieved)";
+
+  const analysisPrompt = `Analyze this startup idea and return the structured FORGE report.
+
+FOUNDER INPUT:
+"""
+${combinedContext(input)}
+"""
+
+GROUNDED RESEARCH NOTES (web search results; the only verified facts):
+"""
+${scout.researchNotes || "No grounded research notes were retrieved."}
+"""
+
+VERIFIED SOURCES FROM GOOGLE SEARCH (numbered):
+${sourcesBlock}
+
+EXPERIMENTS THE FOUNDER REPORTS HAVING RUN (self-reported, not independently verified):
+${input.evidenceLines.length > 0 ? input.evidenceLines.join("\n") : "None reported."}
+
+FOUNDER PROFILE (self-reported by the founder):
+${profileBlock(input.profileLines)}
+
+PRE-EXISTING GROUNDING FLAGS:
+${scout.flags.length > 0 ? scout.flags.join("\n") : "None"}
+
+RULES:
+- Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
+- founder_fit: judge it against the FOUNDER PROFILE (skills, background, time, money, location) and anything the founder wrote about themselves. If neither says anything about the founder, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
+- Tailor go_to_market, pricing and validate_next to the founder's country, city, budget and time when the profile gives them. A founder with little money needs steps that cost little or nothing.
+- decision: make one clear call. Use "go" only when the idea is worth executing now (roughly overall >= 60 with no fatal flaw). Use "kill" when the core problem or market looks fundamentally weak. Otherwise "pivot". For pivot or kill, give 2-3 concrete alternative ideas built on what is strongest here; for go, give an empty pivots array.
+- Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
+- Founder experiments: treat reported results as real but self-reported evidence. A result that went against the idea must lower the relevant scores and appear in weaknesses or key_risks. A supporting result only raises scores as far as its notes give specifics (who, how many, what they did or paid); vague or missing notes earn little. Say in the rationale which results moved the score. Add one grounding_flags entry stating that experiment results are self-reported. Do not repeat a finished experiment in validate_next; suggest what to test next instead.
+- Business plan: tam_estimate and pricing_hypothesis MUST explicitly state they are estimates and list all underlying assumptions in assumptions[].
+- grounding_flags: list every important claim, competitor figure, market size, or assumption that could not be verified from the retrieved sources.`;
+
+  const parsed = (await withRetry(() =>
+    llm.generateJson({
+      system: ANALYSIS_SYSTEM_INSTRUCTION + languageRule(input.language),
+      prompt: analysisPrompt,
+      schema: REPORT_SCHEMA,
+      schemaName: "forge_report",
+      effort: "medium",
+    })
+  )) as Partial<RawReport> | null;
+
+  if (!parsed || typeof parsed !== "object" || !parsed.idea_score) {
+    throw new Error("The model returned a report that could not be read. Click Retry.");
+  }
+  return buildReport(parsed, scout);
+}
+
+const SKEPTIC_SCHEMA: SchemaNode = {
+  type: "OBJECT",
+  properties: {
+    competitor_checks: {
+      type: "ARRAY",
+      description: "One entry per listed competitor, in the same order.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          competitor_number: { type: "INTEGER", description: "The C number of the competitor." },
+          supported: {
+            type: "BOOLEAN",
+            description:
+              "True only if the extract of its cited source clearly shows this company exists and does what is claimed.",
+          },
+        },
+        required: ["competitor_number", "supported"],
+      },
+    },
+    claim_checks: {
+      type: "ARRAY",
+      description:
+        "Up to 8 specific factual claims taken from the report (numbers, market facts, prices, customer behaviour), each judged against the source extracts.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          claim: { type: "STRING", description: "The claim, quoted or closely paraphrased." },
+          verdict: {
+            type: "STRING",
+            enum: ["supported", "unsupported", "contradicted", "labelled_estimate"],
+            description:
+              "supported: a source extract states it. contradicted: an extract says otherwise. labelled_estimate: the report already presents it as an estimate or assumption. unsupported: none of the above.",
+          },
+        },
+        required: ["claim", "verdict"],
+      },
+    },
+    strongest_objection: {
+      type: "STRING",
+      description:
+        "The single strongest argument against this idea, in two plain sentences, written to the founder. Use only facts the extracts state, and do not mention any competitor you marked unsupported.",
+    },
+  },
+  required: ["competitor_checks", "claim_checks", "strongest_objection"],
+};
+
+/** Drops sentences that mention any of the given names (rejected competitors). */
+function withoutNames(text: string, names: string[]): string {
+  const lowered = names.map((n) => n.toLowerCase()).filter(Boolean);
+  if (lowered.length === 0) return text;
+  return (text.match(/[^.!?]+[.!?]*/g) ?? [])
+    .filter((sentence) => !lowered.some((n) => sentence.toLowerCase().includes(n)))
+    .join("")
+    .trim();
+}
+
+/**
+ * Skeptic agent: re-reads the Scout's source extracts, removes competitors
+ * their source does not back, flags factual claims no source supports, and
+ * argues against the idea. Never adds claims of its own.
+ */
+export async function stepSkeptic(
+  input: AnalyzeInput,
+  scout: ScoutResult,
+  report: ForgeReport,
+  llm: Llm
+): Promise<ForgeReport> {
+  const competitors = report.competitors;
+  const sourceNumber = (url: string) => scout.sources.findIndex((s) => s.url === url) + 1;
+  const competitorBlock =
+    competitors.length > 0
+      ? competitors
+          .map(
+            (c, i) =>
+              `C${i + 1}. ${c.name}: ${c.what_they_do} (cites source ${sourceNumber(c.source_url)})`
+          )
+          .join("\n")
+      : "None.";
+  const reportText = [
+    `Rationale: ${report.idea_score.rationale}`,
+    `Market size: ${report.business_plan.tam_estimate}`,
+    `Pricing: ${report.business_plan.pricing_hypothesis}`,
+    `Go-to-market: ${report.business_plan.go_to_market}`,
+    `Opportunities: ${report.swot.opportunities.join(" | ")}`,
+    `Threats: ${report.swot.threats.join(" | ")}`,
+  ].join("\n");
+
+  const parsed = (await withRetry(() =>
+    llm.generateJson({
+      system:
+        "You are FORGE's Skeptic. Your job is to protect founders from fake research. You check claims ONLY against the numbered source extracts you are given; you know nothing else. If an extract does not clearly state something, it is not supported. Be strict, short and fair." +
+        languageRule(input.language),
+      prompt: `SOURCE EXTRACTS (numbered; the only evidence):
+"""
+${scout.researchNotes || "No source extracts were retrieved."}
+"""
+
+COMPETITORS THE REPORT LISTS:
+${competitorBlock}
+
+REPORT TEXT TO CHECK:
+"""
+${reportText}
+"""
+
+IDEA:
+"""
+${combinedContext(input)}
+"""
+
+Check every competitor against the extract of the source it cites. Then pick up to 8 specific factual claims from the report text and judge each against the extracts. Finally give the strongest objection to the idea, built only on facts the extracts state; never cite a competitor you just marked unsupported.`,
+      schema: SKEPTIC_SCHEMA,
+      schemaName: "skeptic_check",
+      effort: "medium",
+    })
+  )) as {
+    competitor_checks?: Array<{ competitor_number?: unknown; supported?: unknown }>;
+    claim_checks?: Array<{ claim?: unknown; verdict?: unknown }>;
+    strongest_objection?: unknown;
+  } | null;
+
+  const rejected = new Set<number>();
+  for (const check of Array.isArray(parsed?.competitor_checks) ? parsed!.competitor_checks : []) {
+    const n = Number(check?.competitor_number);
+    if (Number.isInteger(n) && n >= 1 && n <= competitors.length && check?.supported === false) {
+      rejected.add(n - 1);
+    }
+  }
+  const kept = competitors.filter((_, i) => !rejected.has(i));
+  const removed = competitors.filter((_, i) => rejected.has(i)).map((c) => c.name);
+
+  const claims = (Array.isArray(parsed?.claim_checks) ? parsed!.claim_checks : [])
+    .map((c) => ({ claim: str(c?.claim).slice(0, 300), verdict: str(c?.verdict) }))
+    .filter((c) => c.claim && c.verdict)
+    .slice(0, 8);
+  const unsupported = claims
+    .filter((c) => c.verdict === "unsupported" || c.verdict === "contradicted")
+    .map((c) => (c.verdict === "contradicted" ? `${c.claim} (the sources say otherwise)` : c.claim));
+  const supportedCount =
+    claims.filter((c) => c.verdict === "supported" || c.verdict === "labelled_estimate").length +
+    kept.length;
+
+  const flags = new Set(report.grounding_flags);
+  for (const name of removed) {
+    flags.add(`Skeptic removed competitor "${name}": its cited source does not back it.`);
+  }
+  for (const claim of unsupported) flags.add(`Skeptic: not supported by the sources: ${claim}`);
+
+  const checked = competitors.length + claims.length;
+  const weakEvidence = checked > 0 && supportedCount / checked < 0.5;
+  return {
+    ...report,
+    competitors: kept,
+    idea_score: {
+      ...report.idea_score,
+      // Mostly unsupported evidence cannot carry a confident verdict.
+      confidence: weakEvidence ? "low" : report.idea_score.confidence,
+    },
+    grounding_flags: Array.from(flags),
+    skeptic: {
+      checked,
+      supported: supportedCount,
+      removed,
+      unsupported,
+      counterargument: withoutNames(str(parsed?.strongest_objection), removed).slice(0, 600),
+    },
+  };
+}
+
+/**
+ * Runs the Skeptic, but never lets it sink a finished report: if it fails for
+ * any reason other than quota, the report goes out with a note instead.
+ */
+export async function stepSkepticSafe(
+  input: AnalyzeInput,
+  scout: ScoutResult,
+  report: ForgeReport,
+  llm: Llm,
+  rethrow: (err: unknown) => boolean = () => false
+): Promise<ForgeReport> {
+  try {
+    return await stepSkeptic(input, scout, report, llm);
+  } catch (err) {
+    if (rethrow(err)) throw err;
+    return {
+      ...report,
+      grounding_flags: [
+        ...report.grounding_flags,
+        "The Skeptic check could not run on this report, so its claims were not double-checked.",
+      ],
+    };
+  }
+}
+
+/**
+ * Runs one analysis and reports progress through emit: "phase" events, then
+ * exactly one of "clarification", "report" or "error".
+ */
+export async function runAnalysis(
+  input: AnalyzeInput,
+  deps: AnalysisDeps,
+  emit: Emit
+): Promise<void> {
+  const { llm } = deps;
+  try {
+    // Phase 1: Problem — one clarifying question if the idea is too vague
+    emit("phase", { phaseIndex: 0, phaseName: "Problem" });
+    const question = await stepClarity(input, llm);
+    if (question) {
+      emit("clarification", { question });
+      return;
+    }
+    if (deps.isCancelled()) return;
+
+    // Phases 2-4: Customer, Market, Competition — the Scout's web research
+    emit("phase", { phaseIndex: 1, phaseName: "Customer" });
+    emit("phase", { phaseIndex: 2, phaseName: "Market" });
+    emit("phase", { phaseIndex: 3, phaseName: "Competition" });
+    const scout = await stepScout(input, deps);
+    if (deps.isCancelled()) return;
+
+    // Phase 5: Business Model — the Analyst writes the report
+    emit("phase", { phaseIndex: 4, phaseName: "Business Model" });
+    const report = await stepAnalyst(input, scout, llm);
+    if (deps.isCancelled()) return;
+
+    // Phase 6: Execution Risk — the Skeptic checks it against the sources
+    emit("phase", { phaseIndex: 5, phaseName: "Execution Risk" });
+    const checked = await stepSkepticSafe(input, scout, report, llm);
+    emit("report", { report: checked });
   } catch (err) {
     emit("error", { error: formatApiError(err, llm) });
   }

@@ -14,6 +14,7 @@ import { LanguageToggle, useI18n } from "../lib/i18n";
 import { formatReportAsMarkdown } from "../lib/storage";
 import type { ExperimentPatch } from "../lib/store";
 import { DecisionCard } from "./DecisionCard";
+import { SkepticCard } from "./SkepticCard";
 import { SprintPanel } from "./SprintPanel";
 import { ValidationPlan } from "./ValidationPlan";
 
@@ -328,6 +329,8 @@ export function ReportScreen({
         </section>
 
         <DecisionCard decision={data.decision} onTestIdea={onTestIdea} />
+
+        <SkepticCard skeptic={data.skeptic} />
 
         {versionIndex === 0 && (
           <SprintPanel

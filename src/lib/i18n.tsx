@@ -115,6 +115,34 @@ const en = {
   phaseDone: "Done",
   phaseRunning: "Running",
   phaseQueued: "Queued",
+  nexusNote:
+    "You can close this page. Nexus keeps working and saves the report to your ideas.",
+  keepInBackground: "Keep working in the background",
+  nexusQuotaWait:
+    "The free AI allowance is used up for now. Nexus will continue automatically when it frees up.",
+
+  // Nexus jobs on the home screen
+  nexusHeading: "Nexus is working",
+  nexusAnalyzing: (idea: string) => `Testing: ${idea}`,
+  nexusSprinting: (idea: string) => `Building the 7-day sprint for: ${idea}`,
+  nexusStep: (step: string) =>
+    ({
+      start: "Step 1 of 4: checking the idea is clear",
+      scout: "Step 2 of 4: Scout is searching the web",
+      analyst: "Step 3 of 4: Analyst is writing the report",
+      skeptic: "Step 4 of 4: Skeptic is checking every claim",
+    })[step] ?? "Queued",
+  nexusWaiting: "Waiting for free AI allowance, will continue automatically",
+  nexusQuestion: "FORGE has a question before it continues",
+  answer: "Answer",
+
+  // Skeptic
+  skepticHeading: "The Skeptic's check",
+  skepticChecked: (supported: number, checked: number) =>
+    `${supported} of ${checked} competitors and claims are backed by the sources FORGE found.`,
+  skepticRemoved: "Removed: their source did not back them",
+  skepticUnsupported: "Not supported by any source",
+  skepticObjection: "Strongest argument against this idea",
 
   // Report
   allIdeas: "All ideas",
@@ -366,6 +394,32 @@ const sw: Dictionary = {
   phaseDone: "Imekamilika",
   phaseRunning: "Inaendelea",
   phaseQueued: "Inasubiri",
+  nexusNote:
+    "Unaweza kufunga ukurasa huu. Nexus inaendelea kufanya kazi na kuhifadhi ripoti kwenye mawazo yako.",
+  keepInBackground: "Endelea kufanya kazi nyuma",
+  nexusQuotaWait:
+    "Kiwango cha bure cha AI kimeisha kwa sasa. Nexus itaendelea yenyewe kikipatikana tena.",
+
+  nexusHeading: "Nexus inafanya kazi",
+  nexusAnalyzing: (idea) => `Inapima: ${idea}`,
+  nexusSprinting: (idea) => `Inatengeneza mpango wa siku 7 wa: ${idea}`,
+  nexusStep: (step) =>
+    ({
+      start: "Hatua 1 kati ya 4: kuhakikisha wazo liko wazi",
+      scout: "Hatua 2 kati ya 4: Scout anatafuta mtandaoni",
+      analyst: "Hatua 3 kati ya 4: Analyst anaandika ripoti",
+      skeptic: "Hatua 4 kati ya 4: Skeptic anakagua kila dai",
+    })[step] ?? "Inasubiri",
+  nexusWaiting: "Inasubiri kiwango cha bure cha AI, itaendelea yenyewe",
+  nexusQuestion: "FORGE ina swali kabla ya kuendelea",
+  answer: "Jibu",
+
+  skepticHeading: "Ukaguzi wa Skeptic",
+  skepticChecked: (supported, checked) =>
+    `Washindani na madai ${supported} kati ya ${checked} yanaungwa mkono na vyanzo FORGE ilivyopata.`,
+  skepticRemoved: "Wameondolewa: chanzo chao hakikuwaunga mkono",
+  skepticUnsupported: "Hayaungwi mkono na chanzo chochote",
+  skepticObjection: "Hoja yenye nguvu zaidi dhidi ya wazo hili",
 
   allIdeas: "Mawazo yote",
   copyMarkdown: "Nakili kama Markdown",

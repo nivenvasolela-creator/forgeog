@@ -5,11 +5,17 @@ import { useI18n } from "../lib/i18n";
 interface WorkingScreenProps {
   activePhaseIndex: number;
   ideaPreview: string;
+  /** Set when Nexus runs the job: the founder may leave and it keeps going. */
+  onBackground?: () => void;
+  /** True while the job waits for free model quota to come back. */
+  waitingForQuota?: boolean;
 }
 
 export function WorkingScreen({
   activePhaseIndex,
   ideaPreview,
+  onBackground,
+  waitingForQuota = false,
 }: WorkingScreenProps) {
   const { t } = useI18n();
   return (
@@ -79,6 +85,28 @@ export function WorkingScreen({
           })}
         </ol>
       </div>
+
+      {waitingForQuota && (
+        <p
+          role="status"
+          className="mt-5 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] p-4 text-sm leading-relaxed text-[#3F3F46]"
+        >
+          {t.nexusQuotaWait}
+        </p>
+      )}
+
+      {onBackground && (
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm leading-relaxed text-[#6B6B65]">{t.nexusNote}</p>
+          <button
+            type="button"
+            onClick={onBackground}
+            className="inline-flex min-h-[44px] shrink-0 cursor-pointer items-center justify-center rounded-xl border border-[#DFDED8] bg-white px-4 text-sm font-medium text-[#18181B] hover:bg-[#FAFAF8]"
+          >
+            {t.keepInBackground}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

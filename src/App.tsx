@@ -8,6 +8,7 @@ import { WorkingScreen } from "./components/WorkingScreen";
 import {
   analyzeIdea,
   buildSprintPlan,
+  sprintRequest,
   completedEvidence,
   STRESS_TEST_PHASES,
   type Experiment,
@@ -15,6 +16,14 @@ import {
   type Sprint,
 } from "./lib/analyzeIdea";
 import { useI18n } from "./lib/i18n";
+import {
+  enqueueJob,
+  listActiveJobs,
+  nexusAvailable,
+  phaseForStep,
+  watchJob,
+  type NexusJob,
+} from "./lib/nexus";
 import {
   createLocalProfileStore,
   createSupabaseProfileStore,
@@ -106,6 +115,13 @@ export default function App() {
   const [sprintError, setSprintError] = useState<{ ideaId: string; message: string } | null>(
     null
   );
+
+  // Nexus: jobs still working in the background, the one shown on the
+  // working screen, and the job whose clarifying question is being answered.
+  const [activeJobs, setActiveJobs] = useState<NexusJob[]>([]);
+  const [waitingForQuota, setWaitingForQuota] = useState(false);
+  const foregroundJobRef = useRef<string | null>(null);
+  const answeringJobRef = useRef<string | null>(null);
 
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [ideasLoading, setIdeasLoading] = useState(true);
@@ -225,6 +241,127 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [screen]);
 
+  const reloadIdeas = useCallback(async () => {
+    try {
+      setIdeas(await store.listIdeas());
+    } catch {
+      // Keep what is on screen; the next refresh tries again.
+    }
+  }, [store]);
+
+  // Follow Nexus jobs that run in the background; when one finishes, load
+  // the new report or sprint into the workspace.
+  const activeCountRef = useRef(0);
+  const refreshActiveJobs = useCallback(async () => {
+    if (!supabase || !nexusAvailable(supabase) || !userId) return;
+    try {
+      const list = await listActiveJobs(supabase);
+      const working = list.filter((j) => j.status !== "needs_input").length;
+      if (working < activeCountRef.current) void reloadIdeas();
+      activeCountRef.current = working;
+      setActiveJobs(list);
+    } catch {
+      // Try again on the next tick.
+    }
+  }, [userId, reloadIdeas]);
+
+  useEffect(() => {
+    void refreshActiveJobs();
+  }, [refreshActiveJobs]);
+
+  const hasWorkingJobs = activeJobs.some((j) => j.status !== "needs_input");
+  useEffect(() => {
+    if (!hasWorkingJobs) return;
+    const timer = window.setInterval(() => void refreshActiveJobs(), 5000);
+    return () => window.clearInterval(timer);
+  }, [hasWorkingJobs, refreshActiveJobs]);
+
+  /** Runs an analysis as a Nexus job and follows it on the working screen. */
+  const runAnalysisWithNexus = async (
+    sb: NonNullable<typeof supabase>,
+    trimmedIdea: string,
+    clarificationText?: string
+  ) => {
+    const revising = ideas.find((i) => i.id === revisingIdeaId);
+    const jobId = await enqueueJob(
+      sb,
+      "analyze",
+      {
+        rawIdea: trimmedIdea,
+        clarification: clarificationText?.trim() || undefined,
+        evidence: revising ? completedEvidence(revising.experiments) : undefined,
+        profile: profile ?? undefined,
+        language: lang,
+        ideaId: revisingIdeaId ?? undefined,
+      },
+      answeringJobRef.current ?? undefined
+    );
+    answeringJobRef.current = null;
+    foregroundJobRef.current = jobId;
+    void refreshActiveJobs();
+
+    const job = await watchJob(
+      sb,
+      jobId,
+      (update) => {
+        const phase = phaseForStep(update.step);
+        if (phase > targetPhaseRef.current) targetPhaseRef.current = phase;
+        setWaitingForQuota(update.error === "quota");
+      },
+      () => foregroundJobRef.current !== jobId
+    );
+    setWaitingForQuota(false);
+    // Null means the founder sent it to the background; the home screen follows it.
+    if (!job) return;
+    foregroundJobRef.current = null;
+
+    if (job.status === "needs_input") {
+      answeringJobRef.current = job.id;
+      setClarifyingQuestion(job.result?.question ?? "");
+      setClarificationAnswer("");
+      setScreen("home");
+      void refreshActiveJobs();
+      return;
+    }
+    if (job.status === "failed") {
+      throw new Error(job.error === "quota" ? t.aiLimitReached : job.error || t.analysisFailed);
+    }
+
+    for (let idx = displayPhaseRef.current; idx <= STRESS_TEST_PHASES.length; idx++) {
+      setActivePhaseIndex(idx);
+      await new Promise((resolve) => window.setTimeout(resolve, 140));
+    }
+    const loaded = await store.listIdeas();
+    setIdeas(loaded);
+    void refreshActiveJobs();
+    const ideaId = job.result?.ideaId ?? null;
+    setActiveIdeaId(ideaId);
+    setActiveVersionId(null);
+    rememberActiveIdea(ideaId);
+    resetDraft();
+    setScreen(ideaId && loaded.some((i) => i.id === ideaId) ? "idea" : "home");
+  };
+
+  const handleKeepInBackground = () => {
+    foregroundJobRef.current = null;
+    setWaitingForQuota(false);
+    resetDraft();
+    rememberActiveIdea(null);
+    setActiveIdeaId(null);
+    setScreen("home");
+    void refreshActiveJobs();
+  };
+
+  /** Re-opens a background job's clarifying question so the founder can answer it. */
+  const handleAnswerJob = (job: NexusJob) => {
+    resetDraft();
+    answeringJobRef.current = job.id;
+    setRevisingIdeaId(job.input?.ideaId ?? null);
+    setRawIdea(job.input?.rawIdea ?? "");
+    setClarifyingQuestion(job.result?.question ?? "");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const runAnalysis = async (ideaText: string, clarificationText?: string) => {
     const trimmedIdea = ideaText.trim();
     if (!trimmedIdea) {
@@ -243,6 +380,18 @@ export default function App() {
     displayPhaseRef.current = 0;
     setActivePhaseIndex(0);
     setScreen("working");
+
+    if (supabase && nexusAvailable(supabase)) {
+      try {
+        await runAnalysisWithNexus(supabase, trimmedIdea, clarificationText);
+      } catch (err) {
+        foregroundJobRef.current = null;
+        const message = errorText(err, t.analysisFailed);
+        setErrorMessage(isQuotaError(message) ? t.aiLimitReached : message);
+        setScreen("home");
+      }
+      return;
+    }
 
     try {
       let accessToken: string | undefined;
@@ -386,6 +535,31 @@ export default function App() {
     if (sprintBuildingFor) return;
     setSprintBuildingFor(idea.id);
     setSprintError(null);
+    if (supabase && nexusAvailable(supabase)) {
+      try {
+        const jobId = await enqueueJob(
+          supabase,
+          "sprint",
+          sprintRequest(idea, { profile, language: lang })
+        );
+        void refreshActiveJobs();
+        const job = await watchJob(supabase, jobId, () => {}, () => false);
+        if (job?.status === "failed") {
+          throw new Error(job.error === "quota" ? t.aiLimitReached : job.error || t.unknownError);
+        }
+        await reloadIdeas();
+        void refreshActiveJobs();
+      } catch (err) {
+        const message = errorText(err, t.unknownError);
+        setSprintError({
+          ideaId: idea.id,
+          message: isQuotaError(message) ? t.aiLimitReached : t.sprintFailed(message),
+        });
+      } finally {
+        setSprintBuildingFor(null);
+      }
+      return;
+    }
     try {
       let accessToken: string | undefined;
       if (supabase) {
@@ -532,6 +706,8 @@ export default function App() {
       <WorkingScreen
         activePhaseIndex={activePhaseIndex}
         ideaPreview={rawIdea.trim()}
+        onBackground={nexusAvailable(supabase) ? handleKeepInBackground : undefined}
+        waitingForQuota={waitingForQuota}
       />
     );
   }
@@ -603,6 +779,8 @@ export default function App() {
       userEmail={session?.user.email ?? null}
       onSignOut={signOut}
       onOpenProfile={() => setScreen("profile")}
+      activeJobs={activeJobs}
+      onAnswerJob={handleAnswerJob}
       showProfileNudge={!profileHasSubstance(profile)}
     />
   );
