@@ -294,6 +294,23 @@ const en = {
   skipForNow: "Skip for now",
   profileSaveFailed: (msg: string) => `Could not save your profile (${msg}).`,
 
+  // Two scores, licences, evidence
+  splitOpportunity: "Opportunity",
+  splitOpportunityHint: "The market on its own",
+  splitReadiness: "Your readiness",
+  splitReadinessHint: "You, right now",
+  splitGapNote: "A good opportunity with low readiness means start smaller, not stop.",
+  splitGaps: "How to close the gap",
+  regulationHeading: "Licences & rules to check",
+  regulationLead: "FORGE cannot confirm the law for you. Check these with the right office before you start serving or charging customers.",
+  regulationCheckWith: "Check with",
+  evidenceHeading: "Evidence behind the big claims",
+  evidenceSupported: "Backed",
+  evidenceEstimate: "Estimate",
+  evidenceUnsupported: "Not backed",
+  evidenceContradicted: "Sources disagree",
+  evidenceSource: "source",
+
   // Feedback
   close: "Close",
   feedbackButton: "Feedback",
@@ -652,6 +669,23 @@ const sw: Dictionary = {
   saving: "Inahifadhi...",
   skipForNow: "Ruka kwa sasa",
   profileSaveFailed: (msg) => `Imeshindikana kuhifadhi wasifu wako (${msg}).`,
+
+  // Two scores, licences, evidence
+  splitOpportunity: "Fursa",
+  splitOpportunityHint: "Soko lenyewe",
+  splitReadiness: "Utayari wako",
+  splitReadinessHint: "Wewe, sasa hivi",
+  splitGapNote: "Fursa nzuri yenye utayari mdogo maana yake anza kidogo, si kuacha.",
+  splitGaps: "Jinsi ya kuziba pengo",
+  regulationHeading: "Leseni na sheria za kuhakiki",
+  regulationLead: "FORGE haiwezi kuthibitisha sheria kwa niaba yako. Hakiki haya na ofisi husika kabla ya kuanza kuhudumia au kutoza wateja.",
+  regulationCheckWith: "Hakiki na",
+  evidenceHeading: "Ushahidi wa madai makubwa",
+  evidenceSupported: "Lina chanzo",
+  evidenceEstimate: "Makadirio",
+  evidenceUnsupported: "Halina chanzo",
+  evidenceContradicted: "Vyanzo vinapinga",
+  evidenceSource: "chanzo",
 
   // Feedback
   close: "Funga",

@@ -16,6 +16,7 @@ import { formatReportAsMarkdown } from "../lib/storage";
 import type { ExperimentPatch } from "../lib/store";
 import { DecisionCard } from "./DecisionCard";
 import { SkepticCard } from "./SkepticCard";
+import { RegulationCard } from "./RegulationCard";
 import { RateThis } from "./Feedback";
 import { track } from "../lib/track";
 import { SprintPanel } from "./SprintPanel";
@@ -291,6 +292,51 @@ export function ReportScreen({
                 {data.idea_score.rationale}
               </p>
 
+              {typeof data.idea_score.opportunity === "number" &&
+                typeof data.idea_score.readiness === "number" && (
+                  <div className="mt-5">
+                    <div className="grid grid-cols-2 gap-3">
+                      {(
+                        [
+                          [t.splitOpportunity, t.splitOpportunityHint, data.idea_score.opportunity],
+                          [t.splitReadiness, t.splitReadinessHint, data.idea_score.readiness],
+                        ] as const
+                      ).map(([label, hint, value]) => (
+                        <div key={label} className="rounded-xl border border-[#E5E4DF] bg-[#FAFAF8] p-3 sm:p-4">
+                          <p className="text-xs font-semibold text-[#18181B]">{label}</p>
+                          <p className="text-[11px] text-[#6B6B65]">{hint}</p>
+                          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#18181B]">
+                            {value}
+                            <span className="ml-1 font-mono text-xs font-normal text-[#787871]">/100</span>
+                          </p>
+                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#EFECE6]">
+                            <div
+                              className={`h-full rounded-full ${value >= 60 ? "bg-[#16A34A]" : value >= 40 ? "bg-[#F97316]" : "bg-[#DC2626]"}`}
+                              style={{ width: `${value}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {data.idea_score.opportunity - data.idea_score.readiness >= 20 && (
+                      <p className="mt-2 text-xs leading-relaxed text-[#575752]">{t.splitGapNote}</p>
+                    )}
+                    {(data.idea_score.readiness_gaps?.length ?? 0) > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs font-semibold text-[#18181B]">{t.splitGaps}</p>
+                        <ul className="mt-1.5 space-y-1.5">
+                          {data.idea_score.readiness_gaps!.map((gap, i) => (
+                            <li key={i} className="flex gap-2 text-sm leading-snug text-[#3F3F46]">
+                              <span className="mt-[7px] h-1.5 w-1.5 shrink-0 rounded-full bg-[#F97316]" />
+                              <span>{gap}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               <div className="mt-5 border-t border-[#ECEBE6] pt-4">
                 <p className="text-xs font-medium text-[#6B6B65]">{t.ideaTested}</p>
                 <p className="mt-1 text-sm leading-relaxed text-[#3F3F46]">
@@ -347,6 +393,8 @@ export function ReportScreen({
         </section>
 
         <DecisionCard decision={data.decision} onTestIdea={onTestIdea} />
+
+        <RegulationCard items={data.regulation} />
 
         <SkepticCard skeptic={data.skeptic} />
 

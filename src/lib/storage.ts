@@ -20,6 +20,13 @@ export function formatReportAsMarkdown(report: StoredForgeReport): string {
     "",
     `## Verdict: ${data.idea_score.overall}/100 — ${verdict}`,
     `Confidence: ${data.idea_score.confidence}`,
+    ...(typeof data.idea_score.opportunity === "number" && typeof data.idea_score.readiness === "number"
+      ? [
+          `Opportunity (the market on its own): ${data.idea_score.opportunity}/100`,
+          `Founder readiness (right now): ${data.idea_score.readiness}/100`,
+          ...(data.idea_score.readiness_gaps ?? []).map((g) => `- ${g}`),
+        ]
+      : []),
     "",
     data.idea_score.rationale,
     "",
@@ -35,6 +42,13 @@ export function formatReportAsMarkdown(report: StoredForgeReport): string {
           `## Decision: ${data.decision.call.toUpperCase()}`,
           data.decision.reason,
           ...data.decision.pivots.map((p) => `- ${p}`),
+          "",
+        ]
+      : []),
+    ...(data.regulation && data.regulation.length > 0
+      ? [
+          "## Licences & rules to check",
+          ...data.regulation.map((r) => `- **${r.area}**: ${r.why} (check with: ${r.check_with})`),
           "",
         ]
       : []),

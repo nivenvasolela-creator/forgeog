@@ -1,6 +1,7 @@
 // Founder feedback: saved for the admin inbox, then sent to the team by email
 // (Resend) and/or WhatsApp (CallMeBot) when those are configured.
 //   FEEDBACK_EMAIL + RESEND_API_KEY        -> email
+//   NTFY_TOPIC                             -> phone push (ntfy app, free, no account)
 //   CALLMEBOT_PHONE + CALLMEBOT_APIKEY     -> WhatsApp
 import type { Db } from "./nexus.ts";
 
@@ -123,6 +124,26 @@ export async function notifyTeam(
     );
   }
 
+  // ntfy: the team subscribes to a secret topic in the free ntfy app.
+  const topic = env.NTFY_TOPIC?.trim();
+  if (topic && /^[A-Za-z0-9_-]{6,64}$/.test(topic)) {
+    const server = (env.NTFY_SERVER?.trim() || "https://ntfy.sh").replace(/\/+$/, "");
+    jobs.push(
+      fetch(`${server}/${topic}`, {
+        method: "POST",
+        headers: {
+          Title: `FORGE feedback: ${(LABELS[input.kind] ?? input.kind).replace(/[^\x20-\x7E]/g, "").trim()}`,
+          Tags: input.kind === "bug" ? "bug" : input.kind === "praise" ? "heart" : "speech_balloon",
+          Priority: input.kind === "bug" ? "high" : "default",
+        },
+        body: text.slice(0, 3500),
+        signal: AbortSignal.timeout(10_000),
+      }).then((r) => {
+        if (!r.ok) console.error("feedback push failed:", r.status);
+      }),
+    );
+  }
+
   const phone = env.CALLMEBOT_PHONE?.trim();
   const apiKey = env.CALLMEBOT_APIKEY?.trim();
   if (phone && apiKey) {
@@ -142,6 +163,7 @@ export async function notifyTeam(
 export function notificationChannels(env: Record<string, string | undefined>): string[] {
   const out: string[] = [];
   if (env.RESEND_API_KEY?.trim() && env.FEEDBACK_EMAIL?.trim()) out.push("email");
+  if (env.NTFY_TOPIC?.trim()) out.push("push");
   if (env.CALLMEBOT_PHONE?.trim() && env.CALLMEBOT_APIKEY?.trim()) out.push("whatsapp");
   return out;
 }
