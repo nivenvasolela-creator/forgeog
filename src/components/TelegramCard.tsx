@@ -100,9 +100,9 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
   if (!available) return null;
 
   return (
-    <section className="mt-6 rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8">
+    <section className="mt-6 rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 sm:p-8">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#18181B] text-white">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#18181B] text-white">
           <Send className="h-5 w-5" />
         </span>
         <div className="min-w-0">
@@ -153,7 +153,7 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
               type="button"
               onClick={() => void connect()}
               disabled={busy}
-              className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:self-start"
+              className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:self-start"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {busy ? t.telegramOpening : t.telegramConnect}

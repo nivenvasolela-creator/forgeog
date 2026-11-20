@@ -30,7 +30,7 @@ export function WorkingScreen({
         <p className="mt-2 truncate text-sm text-[#6B6B65]">{ideaPreview}</p>
       </header>
 
-      <div className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8">
+      <div className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 sm:p-8">
         <ol className="divide-y divide-[#F0EFEA]">
           {STRESS_TEST_PHASES.map((phase, index) => {
             const isComplete = index < activePhaseIndex;

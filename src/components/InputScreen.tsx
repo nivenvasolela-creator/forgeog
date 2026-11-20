@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, BarChart3, Loader2, MessageCircle, MessageCirc
 import { sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { LanguageToggle, useI18n } from "../lib/i18n";
 import { TodayCard } from "./TodayCard";
+import { Logo } from "./Logo";
 import type { NexusJob } from "../lib/nexus";
 
 interface InputScreenProps {
@@ -75,8 +76,8 @@ export function InputScreen({
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
       <header className="mb-8 sm:mb-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-[22px] font-medium tracking-[0.28em] text-[#18181B] sm:text-2xl">
-            FORGE
+          <h1>
+            <Logo />
           </h1>
           <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6B65] sm:gap-3">
             {onOpenAdmin && (
@@ -93,7 +94,7 @@ export function InputScreen({
               <button
                 type="button"
                 onClick={onOpenAsk}
-                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-[#18181B] px-2.5 font-semibold text-white hover:bg-[#3F3F46]"
+                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[#18181B] px-2.5 font-semibold text-white hover:bg-[#3F3F46]"
               >
                 <MessageCircle className="h-3.5 w-3.5" />
                 {t.askForge}
@@ -110,7 +111,14 @@ export function InputScreen({
             <LanguageToggle />
           </div>
         </div>
-        <p className="mt-3 max-w-xl text-base leading-relaxed text-[#575752]">{t.tagline}</p>
+        <p className="mt-7 flex items-center gap-3 font-mono text-[10.5px] tracking-[0.22em] text-[#6B6B65] uppercase">
+          <span className="h-px w-8 bg-[#A1A19A]" />
+          {t.eyebrow}
+        </p>
+        <h2 className="mt-4 font-display text-[44px] leading-[0.95] tracking-[-0.01em] text-[#0B0B0B] sm:text-[56px]">
+          {t.heroLead} <em className="text-[#F97316]">{t.heroAccent}</em> {t.heroTail}
+        </h2>
+        <p className="mt-5 max-w-xl text-base leading-relaxed text-[#3F3F46]">{t.tagline}</p>
         {onSignOut && (
           <p className="mt-2 flex min-w-0 items-baseline gap-3 text-xs text-[#6B6B65]">
             {userEmail && <span className="truncate">{userEmail}</span>}
@@ -129,7 +137,7 @@ export function InputScreen({
             <button
               type="button"
               onClick={onOpenProfile}
-              className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
+              className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
             >
               {t.profileNudgeAction}
             </button>
@@ -149,7 +157,7 @@ export function InputScreen({
         {activeJobs.length > 0 && (
           <section
             aria-labelledby="nexus-heading"
-            className="mb-6 rounded-2xl border border-[#E5E4DF] bg-white p-5"
+            className="mb-6 rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5"
           >
             <h2 id="nexus-heading" className="text-sm font-semibold text-[#18181B]">
               {t.nexusHeading}
@@ -174,7 +182,7 @@ export function InputScreen({
                       <button
                         type="button"
                         onClick={() => onAnswerJob(job)}
-                        className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-lg bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
+                        className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
                       >
                         {t.answer}
                       </button>
@@ -205,7 +213,7 @@ export function InputScreen({
 
         <form
           onSubmit={handleFormSubmit}
-          className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"
+          className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 sm:p-8"
         >
           {revisingTitle && (
             <div className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-[#E5E4DF] bg-[#FAF9F6] px-4 py-3">
@@ -303,7 +311,7 @@ export function InputScreen({
             </p>
             <button
               type="submit"
-              className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] sm:w-auto"
+              className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] sm:w-auto"
             >
               <span>
                 {clarifyingQuestion ? t.submitContinue : revisingTitle ? t.submitRerun : t.submitIgnite}
@@ -330,7 +338,7 @@ export function InputScreen({
               {t.noIdeas}
             </p>
           ) : (
-            <div className="divide-y divide-[#ECEBE6] rounded-2xl border border-[#E5E4DF] bg-white">
+            <div className="divide-y divide-[#ECEBE6] rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl">
               {ideas.map((idea) => {
                 const latest = idea.versions[0];
                 const previous = idea.versions[1];

@@ -104,7 +104,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"
+        className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 sm:p-8"
       >
         {/* Every field carries a top margin; cancel it for the first row. */}
         <div className="-mt-5 grid grid-cols-1 gap-x-4 sm:grid-cols-2">
@@ -145,7 +145,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }
           <button
             type="submit"
             disabled={busy}
-            className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             <span>{busy ? t.saving : t.saveProfile}</span>
             {!busy && <ArrowRight className="h-4 w-4" />}

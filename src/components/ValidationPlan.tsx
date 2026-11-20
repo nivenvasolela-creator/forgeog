@@ -49,7 +49,7 @@ export function ValidationPlan({
   return (
     <section
       aria-labelledby="validation-plan-heading"
-      className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8"
+      className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2
@@ -117,7 +117,7 @@ export function ValidationPlan({
               <button
                 type="button"
                 onClick={onRerun}
-                className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46]"
+                className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46]"
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>{t.rerunWithResults}</span>

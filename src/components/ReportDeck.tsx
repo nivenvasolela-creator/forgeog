@@ -44,7 +44,7 @@ const pad = (n: number) => String(n).padStart(2, "0");
 
 function Label({ children }: { children: ReactNode }) {
   return (
-    <p className="text-[10.5px] font-medium tracking-[0.16em] text-[#8A8A82] uppercase">{children}</p>
+    <p className="font-mono text-[10px] tracking-[0.2em] text-[#8A8A82] uppercase">{children}</p>
   );
 }
 
@@ -554,7 +554,7 @@ export function ReportDeck({
             <div
               key={behind.id}
               aria-hidden="true"
-              className="absolute inset-0 rounded-[22px] border border-[#E5E4DF] bg-white"
+              className="absolute inset-0 rounded-[22px] border border-white/80 bg-white/55 backdrop-blur-xl"
               style={{
                 transform: `translateY(${10 * k - 10 * lift}px) scale(${1 - 0.035 * k + 0.035 * lift})`,
                 opacity: 1 - 0.35 * k + 0.35 * lift,
@@ -573,7 +573,7 @@ export function ReportDeck({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            className="absolute inset-0 flex cursor-grab touch-pan-y flex-col overflow-hidden rounded-[22px] border border-[#E5E4DF] bg-white shadow-[0_1px_2px_rgba(24,24,27,0.04),0_30px_60px_-30px_rgba(24,24,27,0.22)] select-none active:cursor-grabbing"
+            className="absolute inset-0 flex cursor-grab touch-pan-y flex-col overflow-hidden rounded-[22px] border border-white/90 bg-white/80 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_30px_70px_-34px_rgba(40,48,90,0.40)] backdrop-blur-2xl select-none active:cursor-grabbing"
             style={{
               transform: topTransform,
               opacity: leaving ? 0 : 1,
@@ -583,7 +583,7 @@ export function ReportDeck({
             }}
           >
             <header className="flex items-baseline justify-between gap-3 border-b border-[#F0EFEA] px-7 pt-6 pb-4">
-              <h2 className="font-display text-[21px] font-normal tracking-tight text-[#18181B]">{card.title}</h2>
+              <h2 className="font-display text-[24px] leading-none font-normal text-[#18181B]">{card.title}</h2>
               <span className="shrink-0 font-mono text-[11px] text-[#9B9B94] tabular-nums">{pad(index + 1)}</span>
             </header>
 

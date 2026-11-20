@@ -23,6 +23,7 @@ import { track } from "../lib/track";
 import { SprintPanel } from "./SprintPanel";
 import { ValidationPlan } from "./ValidationPlan";
 import { ReportDeck } from "./ReportDeck";
+import { LogoMark } from "./Logo";
 
 interface ReportScreenProps {
   idea: Idea;
@@ -138,9 +139,7 @@ export function ReportScreen({
           >
             <ArrowLeft className="h-4 w-4" />
             <span>
-              <span className="font-display font-medium tracking-tight text-[#18181B]">
-                FORGE
-              </span>{" "}
+              <LogoMark className="inline h-4 w-[17px] align-[-2px]" />{" "}
               · {t.allIdeas}
             </span>
           </button>
@@ -180,7 +179,7 @@ export function ReportScreen({
             <button
               type="button"
               onClick={onRevise}
-              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] whitespace-nowrap shrink-0"
+              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] whitespace-nowrap shrink-0"
             >
               <RefreshCw className="h-4 w-4" />
               <span>{t.reviseRerun}</span>
@@ -262,7 +261,7 @@ export function ReportScreen({
       <div
         role="tablist"
         aria-label={idea.title}
-        className="mb-5 inline-flex w-full rounded-2xl border border-[#E5E4DF] bg-white p-1 sm:w-auto"
+        className="mb-5 inline-flex w-full rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-1 sm:w-auto"
       >
         {(
           [
@@ -327,7 +326,7 @@ export function ReportScreen({
       {view === "full" && (
       <div className="space-y-6">
         {/* Hero Verdict + Breakdown */}
-        <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
+        <section className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8">
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-12 lg:gap-10">
             <div className="lg:col-span-7">
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs font-medium text-[#6B6B65]">
@@ -524,7 +523,7 @@ export function ReportScreen({
         </section>
 
         {/* SWOT 2x2 Grid */}
-        <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
+        <section className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8">
           <h2 className="font-display text-lg font-medium text-[#18181B]">
             {t.swot}
           </h2>
@@ -542,7 +541,7 @@ export function ReportScreen({
         </section>
 
         {/* Competitors & Sources */}
-        <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
+        <section className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8">
           <h2 className="font-display text-lg font-medium text-[#18181B]">
             {t.competitors}
           </h2>
@@ -613,7 +612,7 @@ export function ReportScreen({
         {/* Blueprint & Business Plan */}
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Blueprint */}
-          <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
+          <section className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8">
             <h2 className="font-display text-lg font-medium text-[#18181B]">
               {t.blueprint}
             </h2>
@@ -702,7 +701,7 @@ export function ReportScreen({
           </section>
 
           {/* Business Plan */}
-          <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
+          <section className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8">
             <h2 className="font-display text-lg font-medium text-[#18181B]">
               {t.businessPlan}
             </h2>

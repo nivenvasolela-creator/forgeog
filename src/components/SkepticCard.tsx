@@ -14,7 +14,7 @@ export function SkepticCard({
   return (
     <section
       aria-labelledby="skeptic-heading"
-      className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8"
+      className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-6 sm:p-8"
     >
       <h2
         id="skeptic-heading"

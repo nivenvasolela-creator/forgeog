@@ -79,7 +79,7 @@ export function DecisionCard({ decision, onTestIdea }: DecisionCardProps) {
                 <button
                   type="button"
                   onClick={() => onTestIdea(pivot)}
-                  className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46]"
+                  className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-full bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46]"
                 >
                   <span>{t.testThisIdea}</span>
                   <ArrowRight className="h-4 w-4" />
