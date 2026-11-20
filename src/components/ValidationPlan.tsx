@@ -54,7 +54,7 @@ export function ValidationPlan({
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2
           id="validation-plan-heading"
-          className="font-display text-lg font-semibold text-[#18181B]"
+          className="font-display text-lg font-medium text-[#18181B]"
         >
           {t.validationPlan}
         </h2>
@@ -110,14 +110,14 @@ export function ValidationPlan({
           </form>
 
           {evidenceCount > 0 && (
-            <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="mt-5 flex flex-col gap-3 rounded-xl border border-[#E5E4DF] bg-[#FAF9F6] p-4 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-sm leading-relaxed text-[#3F3F46]">
                 {t.readyToWeigh(evidenceCount)}
               </p>
               <button
                 type="button"
                 onClick={onRerun}
-                className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C]"
+                className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46]"
               >
                 <RefreshCw className="h-4 w-4" />
                 <span>{t.rerunWithResults}</span>

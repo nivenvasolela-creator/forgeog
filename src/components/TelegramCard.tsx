@@ -102,11 +102,11 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
   return (
     <section className="mt-6 rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#229ED9] text-white">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#18181B] text-white">
           <Send className="h-5 w-5" />
         </span>
         <div className="min-w-0">
-          <h2 className="font-display text-lg font-semibold text-[#18181B]">{t.telegramHeading}</h2>
+          <h2 className="font-display text-lg font-medium text-[#18181B]">{t.telegramHeading}</h2>
           <p className="mt-1 text-sm leading-relaxed text-[#575752]">{t.telegramLead}</p>
         </div>
       </div>
@@ -116,7 +116,7 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
           <Loader2 className="h-4 w-4 animate-spin text-[#9B9B94]" />
         ) : status.connected ? (
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="inline-flex items-center gap-2 text-sm font-medium text-[#15803D]">
+            <p className="inline-flex items-center gap-2 text-sm font-medium text-[#18181B]">
               <CheckCircle2 className="h-4 w-4" />
               {t.telegramConnected}
             </p>
@@ -153,7 +153,7 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
               type="button"
               onClick={() => void connect()}
               disabled={busy}
-              className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#229ED9] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#1A8BC2] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:self-start"
+              className="inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:self-start"
             >
               {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               {busy ? t.telegramOpening : t.telegramConnect}
@@ -165,7 +165,7 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
                   href={link}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-[#1A8BC2] underline underline-offset-4"
+                  className="inline-flex items-center gap-1 font-medium text-[#3F3F46] underline underline-offset-4"
                 >
                   {t.telegramOpenAgain}
                   <ExternalLink className="h-3.5 w-3.5" />

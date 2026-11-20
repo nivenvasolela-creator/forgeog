@@ -21,10 +21,10 @@ export function WorkingScreen({
   return (
     <div className="mx-auto w-full max-w-2xl px-4 py-12 sm:px-6 sm:py-20">
       <header className="mb-8">
-        <span className="font-display text-xl font-bold tracking-tight text-[#18181B]">
+        <span className="font-display text-xl font-medium tracking-tight text-[#18181B]">
           FORGE
         </span>
-        <h1 className="mt-3 font-display text-2xl font-semibold tracking-tight text-[#18181B] sm:text-3xl">
+        <h1 className="mt-3 font-display text-2xl font-medium tracking-tight text-[#18181B] sm:text-3xl">
           {t.stressTesting}
         </h1>
         <p className="mt-2 truncate text-sm text-[#6B6B65]">{ideaPreview}</p>
@@ -47,7 +47,7 @@ export function WorkingScreen({
                       <Check className="h-3.5 w-3.5 stroke-[2.5]" />
                     </span>
                   ) : isActive ? (
-                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#FFF7ED] text-[#F97316]">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-md bg-[#FAF9F6] text-[#F97316]">
                       <Loader2 className="h-4 w-4 animate-spin" />
                     </span>
                   ) : (
@@ -89,7 +89,7 @@ export function WorkingScreen({
       {waitingForQuota && (
         <p
           role="status"
-          className="mt-5 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] p-4 text-sm leading-relaxed text-[#3F3F46]"
+          className="mt-5 rounded-xl border border-[#E5E4DF] bg-[#FAF9F6] p-4 text-sm leading-relaxed text-[#3F3F46]"
         >
           {t.nexusQuotaWait}
         </p>

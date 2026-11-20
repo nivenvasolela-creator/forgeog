@@ -47,8 +47,8 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
       aria-labelledby="today-heading"
       className="mb-6 overflow-hidden rounded-2xl border border-[#E5E4DF] bg-white"
     >
-      <div className="flex items-center gap-2 border-b border-[#F0EFEA] bg-[#FFF7ED] px-5 py-3">
-        <Sun className="h-4 w-4 text-[#EA580C]" />
+      <div className="flex items-center gap-2 border-b border-[#F0EFEA] px-5 py-3">
+        <Sun className="h-4 w-4 text-[#8A8A82]" />
         <h2 id="today-heading" className="text-sm font-semibold text-[#18181B]">
           {greeting}
           {founderName ? `, ${founderName}` : ""}
@@ -63,7 +63,7 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
         >
           <span className="min-w-0">
             <span className="block text-xs font-medium text-[#6B6B65]">{t.todayIdea}</span>
-            <span className="block truncate font-display text-lg font-semibold text-[#18181B] group-hover:underline">
+            <span className="block truncate font-display text-lg font-medium text-[#18181B] group-hover:underline">
               {focus.title}
             </span>
           </span>
@@ -132,7 +132,7 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
               track("today_open_plan", { hasSprint: Boolean(focus.sprint) });
               onOpenIdea(focus);
             }}
-            className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 text-sm font-semibold text-white hover:bg-[#EA580C]"
+            className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
           >
             {focus.sprint ? t.todayOpenPlan : t.todayBuildSprint}
             <ArrowRight className="h-4 w-4" />

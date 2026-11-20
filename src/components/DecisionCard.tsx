@@ -10,19 +10,19 @@ interface DecisionCardProps {
 
 const STYLES = {
   go: {
-    border: "border-[#86EFAC]",
-    bg: "bg-[#F0FDF4]",
-    accent: "text-[#15803D]",
+    border: "border-[#D6D5CF]",
+    bg: "bg-[#F4F3EF]",
+    accent: "text-[#18181B]",
     Icon: CircleCheck,
   },
   pivot: {
-    border: "border-[#FDBA74]",
-    bg: "bg-[#FFF7ED]",
+    border: "border-[#E5E4DF]",
+    bg: "bg-[#FAF9F6]",
     accent: "text-[#C2410C]",
     Icon: Shuffle,
   },
   kill: {
-    border: "border-[#FCA5A5]",
+    border: "border-[#F5C2C0]",
     bg: "bg-[#FEF2F2]",
     accent: "text-[#B91C1C]",
     Icon: CircleX,
@@ -54,7 +54,7 @@ export function DecisionCard({ decision, onTestIdea }: DecisionCardProps) {
       <div className="mt-2 flex items-start gap-3">
         <Icon className={`mt-1 h-6 w-6 shrink-0 ${style.accent}`} />
         <div className="min-w-0">
-          <h2 className={`font-display text-2xl font-bold tracking-tight ${style.accent}`}>
+          <h2 className={`font-display text-2xl font-medium tracking-tight ${style.accent}`}>
             {t.decisionCalls[decision.call]}
           </h2>
           {decision.reason && (
