@@ -102,6 +102,18 @@ export interface TelegramStatus {
   briefEnabled: boolean;
 }
 
+let telegramReady: Promise<boolean> | null = null;
+
+/** True when the server has a Telegram bot set up (asked once per visit). */
+export function telegramAvailable(): Promise<boolean> {
+  if (!API_URL) return Promise.resolve(false);
+  telegramReady ??= fetch(API_URL)
+    .then((r) => r.json())
+    .then((h: { telegram?: boolean }) => h.telegram === true)
+    .catch(() => false);
+  return telegramReady;
+}
+
 export async function getTelegramStatus(sb: SupabaseClient): Promise<TelegramStatus> {
   const { data, error } = await sb
     .from("telegram_links")

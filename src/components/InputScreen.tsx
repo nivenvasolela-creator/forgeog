@@ -1,6 +1,7 @@
 import { AlertCircle, ArrowRight, Loader2, MessageCircle, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
 import { sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { LanguageToggle, useI18n } from "../lib/i18n";
+import { TodayCard } from "./TodayCard";
 import type { NexusJob } from "../lib/nexus";
 
 interface InputScreenProps {
@@ -27,6 +28,8 @@ interface InputScreenProps {
   onOpenProfile: () => void;
   /** Opens Ask FORGE; missing when it is not available. */
   onOpenAsk?: () => void;
+  /** Shown in the Today greeting. */
+  founderName?: string;
   /** Shown until the founder has told FORGE something about themselves. */
   showProfileNudge: boolean;
   /** Nexus jobs still working or waiting for an answer. */
@@ -54,6 +57,7 @@ export function InputScreen({
   onSignOut,
   onOpenProfile,
   onOpenAsk,
+  founderName = "",
   showProfileNudge,
   activeJobs,
   onAnswerJob,
@@ -121,6 +125,14 @@ export function InputScreen({
       </header>
 
       <main>
+        {!ideasLoading && (
+          <TodayCard
+            ideas={ideas}
+            founderName={founderName}
+            onOpenIdea={onSelectIdea}
+            onAsk={onOpenAsk}
+          />
+        )}
         {activeJobs.length > 0 && (
           <section
             aria-labelledby="nexus-heading"

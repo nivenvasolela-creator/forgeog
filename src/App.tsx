@@ -832,6 +832,7 @@ export default function App() {
       onSignOut={signOut}
       onOpenProfile={() => setScreen("profile")}
       onOpenAsk={supabase && askForgeAvailable(supabase) ? () => openAsk(null) : undefined}
+      founderName={profile?.name.trim().split(/\s+/)[0] ?? ""}
       activeJobs={activeJobs}
       onAnswerJob={handleAnswerJob}
       showProfileNudge={!profileHasSubstance(profile)}

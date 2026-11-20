@@ -294,6 +294,20 @@ const en = {
   skipForNow: "Skip for now",
   profileSaveFailed: (msg: string) => `Could not save your profile (${msg}).`,
 
+  // Today (home brief)
+  todayMorning: "Good morning",
+  todayAfternoon: "Good afternoon",
+  todayEvening: "Good evening",
+  todayIdea: "You're working on",
+  todaySprintDay: (n: number) => `Today: sprint day ${n}`,
+  todayReady: "Ready for you",
+  todaySprintFinished: "You finished every task in this sprint. Record what you learned in your tests, then re-run the analysis.",
+  todayNoSprint: (call: string) => `FORGE's call: ${call}. Next step: build your 7-day sprint so you know exactly what to do each day.`,
+  todayOpenTests: "Tests still open",
+  todayOpenPlan: "Open today's plan",
+  todayBuildSprint: "Build my 7-day sprint",
+  todayAsk: "Ask FORGE what to do",
+
   // Ask FORGE
   askForge: "Ask FORGE",
   askForgeLead:
@@ -610,6 +624,20 @@ const sw: Dictionary = {
   saving: "Inahifadhi...",
   skipForNow: "Ruka kwa sasa",
   profileSaveFailed: (msg) => `Imeshindikana kuhifadhi wasifu wako (${msg}).`,
+
+  // Today (home brief)
+  todayMorning: "Habari ya asubuhi",
+  todayAfternoon: "Habari ya mchana",
+  todayEvening: "Habari ya jioni",
+  todayIdea: "Unafanyia kazi",
+  todaySprintDay: (n: number) => `Leo: siku ya ${n} ya sprint`,
+  todayReady: "Tayari kwako",
+  todaySprintFinished: "Umemaliza kazi zote za sprint hii. Andika ulichojifunza kwenye majaribio yako, kisha endesha uchambuzi upya.",
+  todayNoSprint: (call: string) => `Uamuzi wa FORGE: ${call}. Hatua inayofuata: tengeneza sprint yako ya siku 7 ili ujue cha kufanya kila siku.`,
+  todayOpenTests: "Majaribio yaliyo wazi",
+  todayOpenPlan: "Fungua mpango wa leo",
+  todayBuildSprint: "Tengeneza sprint yangu ya siku 7",
+  todayAsk: "Uliza FORGE nifanye nini",
 
   // Ask FORGE
   askForge: "Uliza FORGE",

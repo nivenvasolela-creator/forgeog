@@ -7,6 +7,7 @@ import {
   disconnectTelegram,
   getTelegramStatus,
   setBriefEnabled,
+  telegramAvailable,
   type TelegramStatus,
 } from "../lib/askForge";
 
@@ -20,6 +21,11 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
   const [link, setLink] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [available, setAvailable] = useState(false);
+
+  useEffect(() => {
+    void telegramAvailable().then(setAvailable);
+  }, []);
 
   useEffect(() => {
     getTelegramStatus(supabase)
@@ -89,6 +95,9 @@ export function TelegramCard({ supabase }: { supabase: SupabaseClient }) {
       setBusy(false);
     }
   };
+
+  // Hidden until a bot is set up on the server, so nobody meets a dead button.
+  if (!available) return null;
 
   return (
     <section className="mt-6 rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8">
