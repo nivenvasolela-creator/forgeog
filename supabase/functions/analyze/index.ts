@@ -2,6 +2,10 @@
 //   GET                      health
 //   POST ?action=enqueue     queue an analysis or sprint as a Nexus job (sign-in)
 //   POST ?action=tick        run the next step of a queued job (scheduler)
+//   POST ?action=chat        Ask FORGE: answer one founder message (sign-in)
+//   POST ?action=telegram_link   one-time link to connect Telegram (sign-in)
+//   POST ?action=telegram    Telegram webhook (checked by secret header)
+//   POST ?action=brief       send today's Telegram morning briefs (scheduler)
 //   POST                     run an analysis or sprint (body.mode = "sprint")
 //                            and stream progress as server-sent events (sign-in)
 import {
@@ -13,6 +17,7 @@ import {
 import { createLlmChain, describeChain } from "../_shared/llm.ts";
 import { createSearch } from "../_shared/search.ts";
 import { prepareJob } from "../_shared/router.ts";
+import { formatApiError } from "../_shared/analysis.ts";
 import {
   closeAnsweredJob,
   Db,
@@ -20,6 +25,13 @@ import {
   processNextJob,
   validateJobInput,
 } from "../_shared/nexus.ts";
+import { askForge, chatRateLimited, MAX_CHAT_MESSAGE } from "../_shared/forge_chat.ts";
+import {
+  createTelegramLink,
+  handleTelegramUpdate,
+  sendBriefs,
+  webhookSecret,
+} from "../_shared/telegram.ts";
 
 // Supabase's runtime keeps a request's background work alive with this.
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -39,7 +51,17 @@ const PUBLIC_KEY = env.SUPABASE_ANON_KEY ?? "";
 const SERVICE_KEY = env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 const RATE_LIMIT_MAX = Number(env.RATE_LIMIT_MAX) || DEFAULT_RATE_LIMIT_MAX;
 const db = new Db(SUPABASE_URL, SERVICE_KEY);
-const TICK_URL = `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/analyze?action=tick`;
+const FUNCTION_URL = `${SUPABASE_URL.replace(/\/+$/, "")}/functions/v1/analyze`;
+const TICK_URL = `${FUNCTION_URL}?action=tick`;
+const TELEGRAM_TOKEN = env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
+const APP_URL = env.APP_URL?.trim() || "https://nivenvasolela-creator.github.io/forgeog/";
+
+/** Keeps background work alive after the response is sent (awaits it locally). */
+async function inBackground(work: Promise<unknown>): Promise<void> {
+  const safe = work.catch((err) => console.error("background work failed:", err));
+  if (typeof EdgeRuntime !== "undefined") EdgeRuntime.waitUntil(safe);
+  else await safe;
+}
 
 /** Starts another tick without waiting for it, so a job's steps run back to back. */
 function kickNexus(): void {
@@ -79,6 +101,7 @@ Deno.serve(async (req: Request) => {
       apiKeyConfigured: llm.keyConfigured,
       webSearch: Boolean(search ?? llm.research),
       signInRequired: true,
+      telegram: Boolean(TELEGRAM_TOKEN),
     });
   }
 
@@ -104,6 +127,29 @@ Deno.serve(async (req: Request) => {
     return json({ accepted: true });
   }
 
+  // Telegram webhook: Telegram proves itself with the secret set in setWebhook.
+  if (action === "telegram") {
+    if (!TELEGRAM_TOKEN) return json({ ok: false }, 404);
+    const given = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+    if (given !== (await webhookSecret(TELEGRAM_TOKEN))) return json({ ok: false }, 401);
+    const update = await req.json().catch(() => null);
+    // Answer Telegram at once (or it re-sends the update) and reply in the background.
+    await inBackground(
+      handleTelegramUpdate(update, { db, token: TELEGRAM_TOKEN, appUrl: APP_URL, llm, search })
+    );
+    return json({ ok: true });
+  }
+
+  // Morning brief: sends each linked founder at most one brief a day, so it
+  // needs no sign-in; extra calls send nothing.
+  if (action === "brief") {
+    if (!TELEGRAM_TOKEN) return json({ sent: 0, telegram: false });
+    await inBackground(
+      sendBriefs(db, TELEGRAM_TOKEN, APP_URL).then((n) => console.log(`briefs sent: ${n}`))
+    );
+    return json({ accepted: true });
+  }
+
   const user = await verifyUser(
     SUPABASE_URL,
     PUBLIC_KEY,
@@ -123,13 +169,61 @@ Deno.serve(async (req: Request) => {
     return json({ error: "The request was not valid JSON." }, 400);
   }
 
+  const record = (typeof body === "object" && body !== null ? body : {}) as Record<
+    string,
+    unknown
+  >;
+
+  // Ask FORGE: one message in, one answer out (both saved to the chat history).
+  if (action === "chat") {
+    const message = typeof record.message === "string" ? record.message.trim() : "";
+    if (!message) return json({ error: "Type a question first." }, 400);
+    if (message.length > MAX_CHAT_MESSAGE) {
+      return json({ error: `Keep your message under ${MAX_CHAT_MESSAGE} characters.` }, 400);
+    }
+    if (await chatRateLimited(db, user.userId)) {
+      return json({ error: MESSAGES.rateLimited }, 429);
+    }
+    const ideaId =
+      typeof record.ideaId === "string" && /^[0-9a-f-]{36}$/i.test(record.ideaId)
+        ? record.ideaId
+        : null;
+    try {
+      const answer = await askForge({
+        db,
+        llm,
+        search,
+        userId: user.userId,
+        message,
+        ideaId,
+        language: record.language === "sw" ? "sw" : record.language === "en" ? "en" : undefined,
+        channel: "web",
+      });
+      return json(answer);
+    } catch (err) {
+      console.error("ask forge failed:", err);
+      return json({ error: formatApiError(err, llm) }, 502);
+    }
+  }
+
+  // Connect Telegram: a one-time t.me link that ties the chat to this account.
+  if (action === "telegram_link") {
+    if (!TELEGRAM_TOKEN) {
+      return json({ error: "Telegram is not set up on this server yet." }, 503);
+    }
+    try {
+      return json(
+        await createTelegramLink(db, TELEGRAM_TOKEN, `${FUNCTION_URL}?action=telegram`, user.userId)
+      );
+    } catch (err) {
+      console.error("telegram link failed:", err);
+      return json({ error: "Could not reach Telegram. Try again in a moment." }, 502);
+    }
+  }
+
   // Nexus enqueue: save the work as a job and return at once; the browser
   // watches the job row and may close without stopping it.
   if (action === "enqueue") {
-    const record = (typeof body === "object" && body !== null ? body : {}) as Record<
-      string,
-      unknown
-    >;
     const problem = validateJobInput(record.kind, record.input);
     if (problem) return json({ error: problem }, 400);
     const allowed = await recordRunInDatabase(SUPABASE_URL, SERVICE_KEY, user.userId, RATE_LIMIT_MAX);

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { AlertCircle, ArrowLeft, ArrowRight } from "lucide-react";
 import { LanguageToggle, useI18n } from "../lib/i18n";
 import {
@@ -13,11 +13,13 @@ interface ProfileScreenProps {
   onSave: (profile: FounderProfile) => Promise<void>;
   /** Leaves without saving: "skip" while onboarding, "back" otherwise. */
   onLeave: () => void;
+  /** Shown below the form, e.g. the Telegram connection. */
+  footer?: ReactNode;
 }
 
 type TextField = keyof typeof PROFILE_LIMITS;
 
-export function ProfileScreen({ initial, isOnboarding, onSave, onLeave }: ProfileScreenProps) {
+export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }: ProfileScreenProps) {
   const { t, lang } = useI18n();
   const [draft, setDraft] = useState<FounderProfile>(initial);
   const [busy, setBusy] = useState(false);
@@ -150,6 +152,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave }: Profil
           </button>
         </div>
       </form>
+      {footer}
     </div>
   );
 }

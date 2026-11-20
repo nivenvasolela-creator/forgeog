@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   AlertTriangle,
+  MessageCircle,
   ArrowLeft,
   Check,
   Copy,
@@ -26,6 +27,8 @@ interface ReportScreenProps {
   warning: string | null;
   onBack: () => void;
   onNewIdea: () => void;
+  /** Opens Ask FORGE focused on this idea. */
+  onAsk?: () => void;
   onRevise: () => void;
   onDelete: () => void;
   planDisabled: boolean;
@@ -55,6 +58,7 @@ export function ReportScreen({
   warning,
   onBack,
   onNewIdea,
+  onAsk,
   onRevise,
   onDelete,
   planDisabled,
@@ -148,6 +152,17 @@ export function ReportScreen({
                 </>
               )}
             </button>
+
+            {onAsk && (
+              <button
+                type="button"
+                onClick={onAsk}
+                className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#18181B] bg-white px-4 py-2 text-sm font-semibold text-[#18181B] transition-colors hover:bg-[#18181B] hover:text-white whitespace-nowrap shrink-0"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span>{t.askAboutIdea}</span>
+              </button>
+            )}
 
             <button type="button" onClick={onNewIdea} className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 py-2 text-sm font-medium text-[#18181B] transition-colors hover:bg-[#FAFAF8] whitespace-nowrap shrink-0">
               <Plus className="h-4 w-4 text-[#575752]" />

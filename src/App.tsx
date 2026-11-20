@@ -5,6 +5,9 @@ import { InputScreen } from "./components/InputScreen";
 import { ProfileScreen } from "./components/ProfileScreen";
 import { ReportScreen } from "./components/ReportScreen";
 import { WorkingScreen } from "./components/WorkingScreen";
+import { AskForgeScreen } from "./components/AskForgeScreen";
+import { TelegramCard } from "./components/TelegramCard";
+import { askForgeAvailable, type ChatAction } from "./lib/askForge";
 import {
   analyzeIdea,
   buildSprintPlan,
@@ -39,7 +42,7 @@ import {
 } from "./lib/store";
 import { supabase } from "./lib/supabase";
 
-type FlowScreen = "home" | "working" | "idea" | "profile";
+type FlowScreen = "home" | "working" | "idea" | "profile" | "ask";
 
 const PROFILE_SKIPPED_KEY = "forge_profile_skipped_v1";
 
@@ -126,6 +129,9 @@ export default function App() {
   const [ideas, setIdeas] = useState<Idea[]>([]);
   const [ideasLoading, setIdeasLoading] = useState(true);
   const [screen, setScreen] = useState<FlowScreen>("home");
+  // Ask FORGE: the idea it opened on, and the screen to go back to.
+  const [askIdeaId, setAskIdeaId] = useState<string | null>(null);
+  const [askReturn, setAskReturn] = useState<"home" | "idea">("home");
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null);
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
   const [revisingIdeaId, setRevisingIdeaId] = useState<string | null>(null);
@@ -507,6 +513,28 @@ export default function App() {
     setScreen("idea");
   };
 
+  const openAsk = (ideaId: string | null) => {
+    setAskIdeaId(ideaId);
+    setAskReturn(screen === "idea" ? "idea" : "home");
+    setScreen("ask");
+    window.scrollTo({ top: 0 });
+  };
+
+  const handleChatAction = (action: ChatAction) => {
+    if (action.type === "run_analysis") {
+      handleTestIdea(action.ideaText);
+      return;
+    }
+    if (action.type === "edit_profile") {
+      setScreen("profile");
+      return;
+    }
+    const idea = ideas.find((i) => i.id === action.ideaId);
+    if (!idea) return;
+    handleSelectIdea(idea);
+    if (action.type === "build_sprint" && !idea.sprint) void handleBuildSprint(idea);
+  };
+
   const handleRevise = (idea: Idea) => {
     const latest = idea.versions[0];
     resetDraft();
@@ -697,6 +725,25 @@ export default function App() {
         isOnboarding={!profile}
         onSave={handleSaveProfile}
         onLeave={handleLeaveProfile}
+        footer={
+          profile && supabase && askForgeAvailable(supabase) ? (
+            <TelegramCard supabase={supabase} />
+          ) : null
+        }
+      />
+    );
+  }
+
+  if (screen === "ask" && supabase && askForgeAvailable(supabase)) {
+    return (
+      <AskForgeScreen
+        supabase={supabase}
+        ideas={ideas
+          .filter((i) => i.id !== UNSAVED_IDEA_ID)
+          .map((i) => ({ id: i.id, title: i.title }))}
+        initialIdeaId={askIdeaId}
+        onBack={() => setScreen(askReturn === "idea" && activeIdeaId ? "idea" : "home")}
+        onAction={handleChatAction}
       />
     );
   }
@@ -739,6 +786,11 @@ export default function App() {
         showProfileTip={!profileHasSubstance(profile)}
         onBuildSprint={() => void handleBuildSprint(activeIdea)}
         onToggleSprintTask={(key) => handleToggleSprintTask(activeIdea, key)}
+        onAsk={
+          supabase && askForgeAvailable(supabase) && activeIdea.id !== UNSAVED_IDEA_ID
+            ? () => openAsk(activeIdea.id)
+            : undefined
+        }
       />
     );
   }
@@ -779,6 +831,7 @@ export default function App() {
       userEmail={session?.user.email ?? null}
       onSignOut={signOut}
       onOpenProfile={() => setScreen("profile")}
+      onOpenAsk={supabase && askForgeAvailable(supabase) ? () => openAsk(null) : undefined}
       activeJobs={activeJobs}
       onAnswerJob={handleAnswerJob}
       showProfileNudge={!profileHasSubstance(profile)}

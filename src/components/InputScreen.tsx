@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, Loader2, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, MessageCircle, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
 import { sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { LanguageToggle, useI18n } from "../lib/i18n";
 import type { NexusJob } from "../lib/nexus";
@@ -25,6 +25,8 @@ interface InputScreenProps {
   userEmail: string | null;
   onSignOut: (() => void) | null;
   onOpenProfile: () => void;
+  /** Opens Ask FORGE; missing when it is not available. */
+  onOpenAsk?: () => void;
   /** Shown until the founder has told FORGE something about themselves. */
   showProfileNudge: boolean;
   /** Nexus jobs still working or waiting for an answer. */
@@ -51,6 +53,7 @@ export function InputScreen({
   userEmail,
   onSignOut,
   onOpenProfile,
+  onOpenAsk,
   showProfileNudge,
   activeJobs,
   onAnswerJob,
@@ -68,7 +71,17 @@ export function InputScreen({
           <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
             FORGE
           </h1>
-          <div className="flex min-w-0 items-center gap-3 text-xs text-[#6B6B65]">
+          <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6B65] sm:gap-3">
+            {onOpenAsk && (
+              <button
+                type="button"
+                onClick={onOpenAsk}
+                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg bg-[#18181B] px-2.5 font-semibold text-white hover:bg-[#3F3F46]"
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+                {t.askForge}
+              </button>
+            )}
             <button
               type="button"
               onClick={onOpenProfile}
