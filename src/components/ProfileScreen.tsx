@@ -81,7 +81,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }
       <header className="mb-8">
         <div className="flex items-center justify-between gap-4">
           {isOnboarding ? (
-            <span className="font-display text-2xl font-bold tracking-tight text-[#18181B]">
+            <span className="font-display text-2xl font-medium tracking-tight text-[#18181B]">
               FORGE
             </span>
           ) : (
@@ -96,7 +96,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }
           )}
           <LanguageToggle />
         </div>
-        <h1 className="mt-6 font-display text-2xl font-semibold tracking-tight text-[#18181B] sm:text-3xl">
+        <h1 className="mt-6 font-display text-2xl font-medium tracking-tight text-[#18181B] sm:text-3xl">
           {isOnboarding ? t.profileTitleNew : t.profileTitleEdit}
         </h1>
         <p className="mt-2 max-w-xl text-base leading-relaxed text-[#575752]">{t.profileLead}</p>
@@ -145,7 +145,7 @@ export function ProfileScreen({ initial, isOnboarding, onSave, onLeave, footer }
           <button
             type="submit"
             disabled={busy}
-            className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#EA580C] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+            className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
             <span>{busy ? t.saving : t.saveProfile}</span>
             {!busy && <ArrowRight className="h-4 w-4" />}

@@ -75,7 +75,7 @@ export function InputScreen({
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6 sm:py-16">
       <header className="mb-8 sm:mb-10">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
+          <h1 className="font-display text-[22px] font-medium tracking-[0.28em] text-[#18181B] sm:text-2xl">
             FORGE
           </h1>
           <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6B65] sm:gap-3">
@@ -83,7 +83,7 @@ export function InputScreen({
               <button
                 type="button"
                 onClick={onOpenAdmin}
-                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#F97316] bg-[#FFF7ED] px-2.5 font-semibold text-[#C2410C] hover:bg-[#FFEDD5]"
+                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#F97316] bg-[#FAF9F6] px-2.5 font-semibold text-[#C2410C] hover:bg-[#F4F3EF]"
               >
                 <BarChart3 className="h-3.5 w-3.5" />
                 {t.admin}
@@ -208,7 +208,7 @@ export function InputScreen({
           className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"
         >
           {revisingTitle && (
-            <div className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] px-4 py-3">
+            <div className="mb-5 flex items-start justify-between gap-4 rounded-xl border border-[#E5E4DF] bg-[#FAF9F6] px-4 py-3">
               <p className="min-w-0 text-sm leading-relaxed text-[#3F3F46]">
                 {t.revising(revisingTitle, revisingEvidenceCount)}
               </p>
@@ -288,7 +288,7 @@ export function InputScreen({
                 <button
                   type="button"
                   onClick={onRetry}
-                  className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#FCA5A5] bg-white px-3.5 py-2 text-xs font-semibold text-[#991B1B] transition-colors hover:bg-[#FEE2E2]"
+                  className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-lg border border-[#F5C2C0] bg-white px-3.5 py-2 text-xs font-semibold text-[#991B1B] transition-colors hover:bg-[#FEF2F2]"
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   {t.retry}
@@ -303,7 +303,7 @@ export function InputScreen({
             </p>
             <button
               type="submit"
-              className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#EA580C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] sm:w-auto"
+              className="inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] sm:w-auto"
             >
               <span>
                 {clarifyingQuestion ? t.submitContinue : revisingTitle ? t.submitRerun : t.submitIgnite}
@@ -383,7 +383,7 @@ export function InputScreen({
                       {delta !== null && delta !== 0 && (
                         <div
                           className={`font-mono text-xs tabular-nums ${
-                            delta > 0 ? "text-[#15803D]" : "text-[#B91C1C]"
+                            delta > 0 ? "text-[#18181B]" : "text-[#B91C1C]"
                           }`}
                         >
                           {delta > 0 ? `+${delta}` : delta}

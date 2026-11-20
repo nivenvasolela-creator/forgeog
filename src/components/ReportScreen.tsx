@@ -124,12 +124,7 @@ export function ReportScreen({
     }
   };
 
-  const scoreAccentClass =
-    overall >= 65
-      ? "text-[#15803D]"
-      : overall >= 45
-      ? "text-[#C2410C]"
-      : "text-[#B91C1C]";
+  const scoreAccentClass = "text-[#18181B]";
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
@@ -143,7 +138,7 @@ export function ReportScreen({
           >
             <ArrowLeft className="h-4 w-4" />
             <span>
-              <span className="font-display font-bold tracking-tight text-[#18181B]">
+              <span className="font-display font-medium tracking-tight text-[#18181B]">
                 FORGE
               </span>{" "}
               · {t.allIdeas}
@@ -185,7 +180,7 @@ export function ReportScreen({
             <button
               type="button"
               onClick={onRevise}
-              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] whitespace-nowrap shrink-0"
+              className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] whitespace-nowrap shrink-0"
             >
               <RefreshCw className="h-4 w-4" />
               <span>{t.reviseRerun}</span>
@@ -195,7 +190,7 @@ export function ReportScreen({
 
         <div className="mt-6 flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
           <div className="min-w-0">
-            <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
+            <h1 className="font-display text-2xl font-medium tracking-tight text-[#18181B] sm:text-3xl">
               {idea.title}
             </h1>
             <p className="mt-1 text-xs text-[#6B6B65]">
@@ -347,7 +342,7 @@ export function ReportScreen({
 
               <div className="mt-4 flex items-baseline gap-3">
                 <span
-                  className={`font-display text-5xl font-bold tracking-tight tabular-nums sm:text-6xl ${scoreAccentClass}`}
+                  className={`font-display text-5xl font-medium tracking-tight tabular-nums sm:text-6xl ${scoreAccentClass}`}
                 >
                   {overall}
                 </span>
@@ -358,7 +353,7 @@ export function ReportScreen({
                   <span
                     className={`font-mono text-sm tabular-nums ${
                       delta > 0
-                        ? "text-[#15803D]"
+                        ? "text-[#18181B]"
                         : delta < 0
                         ? "text-[#B91C1C]"
                         : "text-[#787871]"
@@ -371,7 +366,7 @@ export function ReportScreen({
                 )}
               </div>
 
-              <h2 className="mt-3 font-display text-xl font-semibold text-[#18181B] sm:text-2xl">
+              <h2 className="mt-3 font-display text-xl font-medium text-[#18181B] sm:text-2xl">
                 {verdict}
               </h2>
 
@@ -392,13 +387,13 @@ export function ReportScreen({
                         <div key={label} className="rounded-xl border border-[#E5E4DF] bg-[#FAFAF8] p-3 sm:p-4">
                           <p className="text-xs font-semibold text-[#18181B]">{label}</p>
                           <p className="text-[11px] text-[#6B6B65]">{hint}</p>
-                          <p className="mt-2 font-display text-2xl font-bold tabular-nums text-[#18181B]">
+                          <p className="mt-2 font-display text-2xl font-medium tabular-nums text-[#18181B]">
                             {value}
                             <span className="ml-1 font-mono text-xs font-normal text-[#787871]">/100</span>
                           </p>
                           <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[#EFECE6]">
                             <div
-                              className={`h-full rounded-full ${value >= 60 ? "bg-[#16A34A]" : value >= 40 ? "bg-[#F97316]" : "bg-[#DC2626]"}`}
+                              className={`h-full rounded-full bg-[#18181B]`}
                               style={{ width: `${value}%` }}
                             />
                           </div>
@@ -496,14 +491,14 @@ export function ReportScreen({
         {/* Clearly visible "What I couldn't verify" Card */}
         <section
           aria-labelledby="unverified-heading"
-          className="rounded-2xl border border-[#FDBA74] bg-[#FFFBEB] p-6 sm:p-7"
+          className="rounded-2xl border border-[#E5E4DF] bg-[#FAF9F6] p-6 sm:p-7"
         >
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-[#C2410C]" />
             <div className="min-w-0 flex-1">
               <h2
                 id="unverified-heading"
-                className="font-display text-lg font-semibold text-[#18181B]"
+                className="font-display text-lg font-medium text-[#18181B]"
               >
                 {t.couldntVerify}
               </h2>
@@ -530,7 +525,7 @@ export function ReportScreen({
 
         {/* SWOT 2x2 Grid */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
-          <h2 className="font-display text-lg font-semibold text-[#18181B]">
+          <h2 className="font-display text-lg font-medium text-[#18181B]">
             {t.swot}
           </h2>
 
@@ -548,7 +543,7 @@ export function ReportScreen({
 
         {/* Competitors & Sources */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
-          <h2 className="font-display text-lg font-semibold text-[#18181B]">
+          <h2 className="font-display text-lg font-medium text-[#18181B]">
             {t.competitors}
           </h2>
 
@@ -572,7 +567,7 @@ export function ReportScreen({
                       href={comp.source_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
+                      className="inline-flex min-h-[36px] shrink-0 items-center gap-1.5 text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#C2410C]"
                     >
                       <span>{t.source}</span>
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -619,7 +614,7 @@ export function ReportScreen({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           {/* Blueprint */}
           <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
-            <h2 className="font-display text-lg font-semibold text-[#18181B]">
+            <h2 className="font-display text-lg font-medium text-[#18181B]">
               {t.blueprint}
             </h2>
 
@@ -695,7 +690,7 @@ export function ReportScreen({
                         <button
                           type="button"
                           onClick={() => onAddExperiments([step.trim()])}
-                          className="shrink-0 cursor-pointer text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
+                          className="shrink-0 cursor-pointer text-xs font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#C2410C]"
                         >
                           {t.addToPlan}
                         </button>
@@ -708,7 +703,7 @@ export function ReportScreen({
 
           {/* Business Plan */}
           <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
-            <h2 className="font-display text-lg font-semibold text-[#18181B]">
+            <h2 className="font-display text-lg font-medium text-[#18181B]">
               {t.businessPlan}
             </h2>
 
@@ -773,7 +768,7 @@ export function ReportScreen({
 function EstimateTag() {
   const { t } = useI18n();
   return (
-    <span className="rounded border border-[#FDBA74] bg-[#FFF7ED] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#C2410C] uppercase">
+    <span className="rounded border border-[#E5E4DF] bg-[#FAF9F6] px-1.5 py-0.5 font-mono text-[10px] font-semibold tracking-wider text-[#C2410C] uppercase">
       {t.estimate}
     </span>
   );

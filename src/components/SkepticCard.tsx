@@ -18,9 +18,9 @@ export function SkepticCard({
     >
       <h2
         id="skeptic-heading"
-        className="flex items-center gap-2 font-display text-lg font-semibold text-[#18181B]"
+        className="flex items-center gap-2 font-display text-lg font-medium text-[#18181B]"
       >
-        <ShieldCheck className="h-5 w-5 text-[#15803D]" />
+        <ShieldCheck className="h-5 w-5 text-[#18181B]" />
         {t.skepticHeading}
       </h2>
       {skeptic.checked > 0 && (
@@ -64,12 +64,12 @@ export function SkepticCard({
             {skeptic.claims.map((c, i) => {
               const badge =
                 c.verdict === "supported"
-                  ? ["✓", t.evidenceSupported, "bg-[#DCFCE7] text-[#166534]"]
+                  ? ["✓", t.evidenceSupported, "bg-[#F4F3EF] text-[#166534]"]
                   : c.verdict === "labelled_estimate"
                     ? ["~", t.evidenceEstimate, "bg-[#F4F4F1] text-[#57534E]"]
                     : c.verdict === "contradicted"
-                      ? ["✗", t.evidenceContradicted, "bg-[#FEE2E2] text-[#991B1B]"]
-                      : ["✗", t.evidenceUnsupported, "bg-[#FFEDD5] text-[#9A3412]"];
+                      ? ["✗", t.evidenceContradicted, "bg-[#FEF2F2] text-[#991B1B]"]
+                      : ["✗", t.evidenceUnsupported, "bg-[#F4F3EF] text-[#C2410C]"];
               return (
                 <li key={i} className="flex items-start gap-2.5 text-sm leading-relaxed text-[#3F3F46]">
                   <span

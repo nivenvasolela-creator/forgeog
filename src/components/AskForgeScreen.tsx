@@ -57,7 +57,7 @@ function inline(text: string, sources: ChatSource[]): ReactNode[] {
           target="_blank"
           rel="noreferrer"
           title={source.title}
-          className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded bg-[#FFF1E6] px-1 align-[2px] font-mono text-[10px] font-semibold text-[#C2410C] no-underline hover:bg-[#FFE4CC]"
+          className="mx-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded bg-[#F4F3EF] px-1 align-[2px] font-mono text-[10px] font-semibold text-[#C2410C] no-underline hover:bg-[#ECEBE6]"
         >
           {cite[1]}
         </a>
@@ -271,7 +271,7 @@ export function AskForgeScreen({
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#18181B] text-white">
               <MessageCircle className="h-4 w-4" />
             </span>
-            <h1 className="truncate font-display text-lg font-bold tracking-tight text-[#18181B]">
+            <h1 className="truncate font-display text-lg font-medium tracking-tight text-[#18181B]">
               {t.askForge}
             </h1>
           </div>
@@ -330,7 +330,7 @@ export function AskForgeScreen({
 
         {empty && (
           <div className="py-6 sm:py-10">
-            <h2 className="font-display text-2xl font-bold tracking-tight text-[#18181B]">
+            <h2 className="font-display text-2xl font-medium tracking-tight text-[#18181B]">
               {t.askForge}
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#575752]">{t.askForgeLead}</p>
@@ -356,7 +356,7 @@ export function AskForgeScreen({
               <li key={m.id} className="flex flex-col items-end">
                 <div
                   className={`max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] leading-relaxed ${
-                    m.failed ? "border border-[#FECACA] bg-[#FEF2F2] text-[#7F1D1D]" : "bg-[#18181B] text-white"
+                    m.failed ? "border border-[#F5C2C0] bg-[#FEF2F2] text-[#991B1B]" : "bg-[#18181B] text-white"
                   }`}
                 >
                   {m.content}
@@ -378,7 +378,7 @@ export function AskForgeScreen({
               </li>
             ) : (
               <li key={m.id} className="flex gap-3">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-bold text-white">
+                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-medium text-white">
                   F
                 </span>
                 <div className="min-w-0 flex-1">
@@ -443,7 +443,7 @@ export function AskForgeScreen({
           )}
           {sending && (
             <li className="flex gap-3">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-bold text-white">
+              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-medium text-white">
                 F
               </span>
               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md border border-[#E5E4DF] bg-white px-4 py-3 text-sm text-[#6B6B65]">
@@ -454,7 +454,7 @@ export function AskForgeScreen({
           )}
         </ol>
         {error && (
-          <p role="alert" className="mt-4 rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-sm text-[#7F1D1D]">
+          <p role="alert" className="mt-4 rounded-lg border border-[#F5C2C0] bg-[#FEF2F2] px-3 py-2 text-sm text-[#991B1B]">
             {error}
           </p>
         )}
@@ -490,7 +490,7 @@ export function AskForgeScreen({
             disabled={sending || !draft.trim()}
             aria-label={t.askForgeSend}
             title={t.askForgeSend}
-            className="inline-flex h-[46px] w-[46px] shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#F97316] text-white transition-colors hover:bg-[#EA580C] disabled:cursor-not-allowed disabled:bg-[#E5E4DF] disabled:text-[#9B9B94]"
+            className="inline-flex h-[46px] w-[46px] shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#18181B] text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:bg-[#E5E4DF] disabled:text-[#9B9B94]"
           >
             {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
           </button>

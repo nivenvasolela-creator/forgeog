@@ -68,7 +68,7 @@ export function SprintPanel({
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2
           id="sprint-heading"
-          className="flex items-center gap-2 font-display text-lg font-semibold text-[#18181B]"
+          className="flex items-center gap-2 font-display text-lg font-medium text-[#18181B]"
         >
           <Rocket className="h-5 w-5 text-[#F97316]" />
           {t.sprintHeading}
@@ -108,7 +108,7 @@ export function SprintPanel({
           <button
             type="button"
             onClick={onBuild}
-            className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] sm:w-auto"
+            className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] sm:w-auto"
           >
             <Rocket className="h-4 w-4" />
             <span>{t.buildSprint}</span>
@@ -163,7 +163,7 @@ export function SprintPanel({
           </div>
 
           {nextKey === null && totals.total > 0 && (
-            <p className="mt-5 rounded-xl border border-[#86EFAC] bg-[#F0FDF4] p-4 text-sm leading-relaxed text-[#14532D]">
+            <p className="mt-5 rounded-xl border border-[#D6D5CF] bg-[#F4F3EF] p-4 text-sm leading-relaxed text-[#14532D]">
               {t.sprintComplete}
             </p>
           )}
@@ -246,7 +246,7 @@ export function SprintPanel({
             <button
               type="button"
               onClick={onBuild}
-              className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#FCA5A5] bg-white px-3.5 py-2 text-xs font-semibold text-[#991B1B] hover:bg-[#FEE2E2]"
+              className="inline-flex min-h-[40px] shrink-0 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-[#F5C2C0] bg-white px-3.5 py-2 text-xs font-semibold text-[#991B1B] hover:bg-[#FEF2F2]"
             >
               {t.retry}
             </button>
@@ -292,7 +292,7 @@ function TaskCard({
     <li
       className={`rounded-xl p-4 ${
         isNext
-          ? "border-2 border-[#F97316] bg-[#FFFBF5]"
+          ? "border-2 border-[#F97316] bg-[#FAF9F6]"
           : "border border-[#ECEBE6] bg-white"
       }`}
     >

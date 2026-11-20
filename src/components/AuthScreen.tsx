@@ -57,7 +57,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
     <div className="mx-auto w-full max-w-md px-4 py-12 sm:px-6 sm:py-20">
       <header className="mb-8">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="font-display text-2xl font-bold tracking-tight text-[#18181B] sm:text-3xl">
+          <h1 className="font-display text-[22px] font-medium tracking-[0.28em] text-[#18181B] sm:text-2xl">
             FORGE
           </h1>
           <LanguageToggle />
@@ -107,7 +107,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
         {notice && (
           <p
             role="status"
-            className="mt-5 rounded-xl border border-[#FDBA74] bg-[#FFFBEB] p-4 text-sm text-[#3F3F46]"
+            className="mt-5 rounded-xl border border-[#E5E4DF] bg-[#FAF9F6] p-4 text-sm text-[#3F3F46]"
           >
             {notice}
           </p>
@@ -126,7 +126,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
         <button
           type="submit"
           disabled={busy}
-          className="mt-6 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#EA580C] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span>
             {busy ? t.working : mode === "sign-in" ? t.signIn : t.createAccount}
@@ -144,7 +144,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
             setError(null);
             setNotice(null);
           }}
-          className="cursor-pointer font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#9A3412]"
+          className="cursor-pointer font-medium text-[#C2410C] underline underline-offset-4 hover:text-[#C2410C]"
         >
           {mode === "sign-in" ? t.createAnAccount : t.signIn}
         </button>

@@ -95,14 +95,14 @@ const EVENT_NAMES: Record<string, string> = {
 };
 
 const KIND_LABEL: Record<string, string> = {
-  bug: "🐞 Bug",
-  idea: "💡 Idea",
-  confusing: "🤔 Confusing",
-  praise: "❤️ Praise",
-  rating: "👎 Rating",
-  other: "💬 Other",
+  bug: "Bug",
+  idea: "Idea",
+  confusing: "Confusing",
+  praise: "Praise",
+  rating: "Rating",
+  other: "Other",
 };
-const FACES = ["", "😞", "😐", "🙂", "😍"];
+const FACES = ["", "1/4", "2/4", "3/4", "4/4"];
 
 function Card({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   return (
@@ -117,7 +117,7 @@ function Kpi({ label, value, hint }: { label: string; value: number | string; hi
   return (
     <div className="rounded-2xl border border-[#E5E4DF] bg-white p-4">
       <p className="text-xs font-medium text-[#6B6B65]">{label}</p>
-      <p className="mt-1 font-display text-2xl font-bold text-[#18181B] tabular-nums">{value}</p>
+      <p className="mt-1 font-display text-2xl font-medium text-[#18181B] tabular-nums">{value}</p>
       {hint && <p className="mt-0.5 text-xs text-[#9B9B94]">{hint}</p>}
     </div>
   );
@@ -193,7 +193,7 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
         >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="mr-auto font-display text-2xl font-bold tracking-tight text-[#18181B]">FORGE Admin</h1>
+        <h1 className="mr-auto font-display text-2xl font-medium tracking-tight text-[#18181B]">FORGE Admin</h1>
         <div role="group" aria-label="Period" className="inline-flex rounded-lg border border-[#DFDED8] bg-white p-0.5">
           {[1, 7, 14, 30, 90].map((d) => (
             <button
@@ -220,7 +220,7 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
       </header>
 
       {error && (
-        <p role="alert" className="mt-6 rounded-xl border border-[#FECACA] bg-[#FEF2F2] p-4 text-sm text-[#7F1D1D]">
+        <p role="alert" className="mt-6 rounded-xl border border-[#F5C2C0] bg-[#FEF2F2] p-4 text-sm text-[#991B1B]">
           {error}
         </p>
       )}
@@ -232,7 +232,7 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
             <Kpi label="Active today" value={stats.active_today} hint={`${stats.active_7d} in last 7 days`} />
             <Kpi label="Came back another day" value={stats.returning} hint={`of ${stats.active_period} active`} />
             <Kpi
-              label="Answers rated 👍 / 👎"
+              label="Answers rated up / down"
               value={`${stats.ratings.up} / ${stats.ratings.down}`}
               hint={`${stats.reports} reports · ${stats.questions} questions`}
             />
@@ -333,9 +333,9 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
                   {stats.jobs.waiting} waiting · {stats.jobs.quota_waits} paused for AI quota
                 </p>
                 <ul className="mt-2 space-y-1.5">
-                  {stats.job_errors.length === 0 && <li className="text-sm text-[#9B9B94]">No failed jobs. 🎉</li>}
+                  {stats.job_errors.length === 0 && <li className="text-sm text-[#9B9B94]">No failed jobs.</li>}
                   {stats.job_errors.map((e) => (
-                    <li key={e.error} className="rounded-lg bg-[#FEF2F2] px-3 py-2 text-xs text-[#7F1D1D]">
+                    <li key={e.error} className="rounded-lg bg-[#FEF2F2] px-3 py-2 text-xs text-[#991B1B]">
                       ×{e.count} {e.error}
                     </li>
                   ))}
@@ -344,9 +344,9 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
               <div>
                 <p className="text-sm text-[#3F3F46]">Errors in founders' browsers</p>
                 <ul className="mt-2 space-y-1.5">
-                  {stats.client_errors.length === 0 && <li className="text-sm text-[#9B9B94]">No crashes reported. 🎉</li>}
+                  {stats.client_errors.length === 0 && <li className="text-sm text-[#9B9B94]">No crashes reported.</li>}
                   {stats.client_errors.map((e) => (
-                    <li key={e.error} className="rounded-lg bg-[#FEF2F2] px-3 py-2 text-xs text-[#7F1D1D]">
+                    <li key={e.error} className="rounded-lg bg-[#FEF2F2] px-3 py-2 text-xs text-[#991B1B]">
                       ×{e.count} ({e.users} ppl) {e.error}
                     </li>
                   ))}
@@ -377,7 +377,7 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
                 <li key={f.id} className={`py-3 ${f.status === "done" ? "opacity-50" : ""}`}>
                   <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-[#6B6B65]">
                     <span className="font-semibold text-[#18181B]">{KIND_LABEL[f.kind] ?? f.kind}</span>
-                    {f.rating && <span className="text-base">{FACES[f.rating]}</span>}
+                    {f.rating && <span className="font-mono">{FACES[f.rating]}</span>}
                     {f.status === "new" && (
                       <span className="rounded-full bg-[#F97316] px-2 py-0.5 text-[10px] font-bold text-white">NEW</span>
                     )}

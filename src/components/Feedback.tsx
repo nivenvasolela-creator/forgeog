@@ -79,12 +79,7 @@ export function FeedbackProvider({
   );
 }
 
-const FACES: Array<[number, string]> = [
-  [1, "😞"],
-  [2, "😐"],
-  [3, "🙂"],
-  [4, "😍"],
-];
+const SCALE = [1, 2, 3, 4];
 
 function FeedbackDialog({
   supabase,
@@ -161,7 +156,7 @@ function FeedbackDialog({
         className="max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-2xl sm:p-6"
       >
         <div className="flex items-start justify-between gap-3">
-          <h2 id="feedback-title" className="font-display text-lg font-semibold text-[#18181B]">
+          <h2 id="feedback-title" className="font-display text-lg font-medium text-[#18181B]">
             {sent ? t.feedbackThanksTitle : t.feedbackTitle}
           </h2>
           <button
@@ -176,7 +171,7 @@ function FeedbackDialog({
 
         {sent ? (
           <div className="py-6 text-center">
-            <CheckCircle2 className="mx-auto h-10 w-10 text-[#16A34A]" />
+            <CheckCircle2 className="mx-auto h-10 w-10 text-[#18181B]" />
             <p className="mt-3 text-sm leading-relaxed text-[#3F3F46]">{t.feedbackThanks}</p>
             <button
               type="button"
@@ -193,7 +188,7 @@ function FeedbackDialog({
             <fieldset className="mt-5">
               <legend className="text-sm font-medium text-[#18181B]">{t.feedbackHowIsIt}</legend>
               <div className="mt-2 grid grid-cols-4 gap-2">
-                {FACES.map(([value, face]) => (
+                {SCALE.map((value) => (
                   <button
                     key={value}
                     type="button"
@@ -201,13 +196,13 @@ function FeedbackDialog({
                     aria-label={t.feedbackFaces[value - 1]}
                     title={t.feedbackFaces[value - 1]}
                     onClick={() => setRating(rating === value ? null : value)}
-                    className={`flex h-12 cursor-pointer items-center justify-center rounded-xl border text-2xl transition-all ${
+                    className={`flex h-12 cursor-pointer items-center justify-center rounded-xl border text-[13px] font-medium transition-colors ${
                       rating === value
-                        ? "scale-105 border-[#F97316] bg-[#FFF7ED]"
-                        : "border-[#E5E4DF] bg-white grayscale-[40%] hover:grayscale-0"
+                        ? "border-[#18181B] bg-[#18181B] text-white"
+                        : "border-[#E5E4DF] bg-white text-[#3F3F46] hover:border-[#18181B]"
                     }`}
                   >
-                    {face}
+                    {t.feedbackFaces[value - 1]}
                   </button>
                 ))}
               </div>
@@ -267,7 +262,7 @@ function FeedbackDialog({
             <button
               type="submit"
               disabled={busy}
-              className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-5 text-sm font-semibold text-white hover:bg-[#EA580C] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-5 text-sm font-semibold text-white hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {busy ? t.feedbackSending : t.feedbackSend}
@@ -322,7 +317,7 @@ export function RateThis({
             onClick={() => vote(true)}
             aria-label={t.feedbackUseful}
             title={t.feedbackUseful}
-            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-[#F0FDF4] hover:text-[#15803D]"
+            className="inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-lg hover:bg-[#F4F3EF] hover:text-[#18181B]"
           >
             <ThumbsUp className="h-4 w-4" />
           </button>
