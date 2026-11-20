@@ -33,7 +33,7 @@ export function askForgeAvailable(sb: SupabaseClient | null): boolean {
   return Boolean(sb && API_URL);
 }
 
-async function callApi<T>(
+export async function callApi<T>(
   sb: SupabaseClient,
   action: string,
   body: Record<string, unknown>,

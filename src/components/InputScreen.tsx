@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowRight, Loader2, MessageCircle, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
+import { AlertCircle, ArrowRight, BarChart3, Loader2, MessageCircle, MessageCircleQuestion, RotateCcw, UserRound } from "lucide-react";
 import { sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { LanguageToggle, useI18n } from "../lib/i18n";
 import { TodayCard } from "./TodayCard";
@@ -28,6 +28,8 @@ interface InputScreenProps {
   onOpenProfile: () => void;
   /** Opens Ask FORGE; missing when it is not available. */
   onOpenAsk?: () => void;
+  /** Opens the team dashboard; only set for admins. */
+  onOpenAdmin?: () => void;
   /** Shown in the Today greeting. */
   founderName?: string;
   /** Shown until the founder has told FORGE something about themselves. */
@@ -58,6 +60,7 @@ export function InputScreen({
   onOpenProfile,
   onOpenAsk,
   founderName = "",
+  onOpenAdmin,
   showProfileNudge,
   activeJobs,
   onAnswerJob,
@@ -76,6 +79,16 @@ export function InputScreen({
             FORGE
           </h1>
           <div className="flex min-w-0 items-center gap-2 text-xs text-[#6B6B65] sm:gap-3">
+            {onOpenAdmin && (
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="inline-flex min-h-[36px] shrink-0 cursor-pointer items-center gap-1.5 rounded-lg border border-[#F97316] bg-[#FFF7ED] px-2.5 font-semibold text-[#C2410C] hover:bg-[#FFEDD5]"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+                {t.admin}
+              </button>
+            )}
             {onOpenAsk && (
               <button
                 type="button"
