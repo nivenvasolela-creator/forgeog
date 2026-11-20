@@ -135,6 +135,8 @@ export default function App() {
   // Ask FORGE: the idea it opened on, and the screen to go back to.
   const [askIdeaId, setAskIdeaId] = useState<string | null>(null);
   const [askReturn, setAskReturn] = useState<"home" | "idea">("home");
+  // A question to send as soon as Ask FORGE opens (from a report card).
+  const [askQuestion, setAskQuestion] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Analytics: who is signed in, which screen they are on, language switches.
@@ -554,9 +556,10 @@ export default function App() {
     setScreen("idea");
   };
 
-  const openAsk = (ideaId: string | null) => {
-    track("ask_opened", { from: ideaId ? "idea" : "home" });
+  const openAsk = (ideaId: string | null, question?: string) => {
+    track("ask_opened", { from: question ? "card" : ideaId ? "idea" : "home" });
     setAskIdeaId(ideaId);
+    setAskQuestion(question ?? null);
     setAskReturn(screen === "idea" ? "idea" : "home");
     setScreen("ask");
     window.scrollTo({ top: 0 });
@@ -769,7 +772,7 @@ export default function App() {
   const wrap = (node: ReactNode) => (
     <FeedbackProvider
       supabase={session ? supabase : null}
-      showButton={screen !== "ask" && screen !== "working" && screen !== "admin"}
+      showButton={screen === "home" || screen === "profile"}
     >
       {node}
     </FeedbackProvider>
@@ -811,6 +814,8 @@ export default function App() {
           .filter((i) => i.id !== UNSAVED_IDEA_ID)
           .map((i) => ({ id: i.id, title: i.title }))}
         initialIdeaId={askIdeaId}
+        initialQuestion={askQuestion}
+        onQuestionSent={() => setAskQuestion(null)}
         onBack={() => setScreen(askReturn === "idea" && activeIdeaId ? "idea" : "home")}
         onAction={handleChatAction}
       />
@@ -861,7 +866,7 @@ export default function App() {
         onToggleSprintTask={(key) => handleToggleSprintTask(activeIdea, key)}
         onAsk={
           supabase && askForgeAvailable(supabase) && activeIdea.id !== UNSAVED_IDEA_ID
-            ? () => openAsk(activeIdea.id)
+            ? (question?: string) => openAsk(activeIdea.id, question)
             : undefined
         }
       />
