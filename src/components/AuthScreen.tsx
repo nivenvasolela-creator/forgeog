@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertCircle, ArrowRight } from "lucide-react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { LanguageToggle, useI18n } from "../lib/i18n";
+import { Logo } from "./Logo";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -57,12 +58,19 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
     <div className="mx-auto w-full max-w-md px-4 py-12 sm:px-6 sm:py-20">
       <header className="mb-8">
         <div className="flex items-center justify-between gap-4">
-          <h1 className="font-display text-[22px] font-medium tracking-[0.28em] text-[#18181B] sm:text-2xl">
-            FORGE
+          <h1>
+            <Logo />
           </h1>
           <LanguageToggle />
         </div>
-        <p className="mt-3 text-base leading-relaxed text-[#575752]">{t.tagline}</p>
+        <p className="mt-8 flex items-center gap-3 font-mono text-[10.5px] tracking-[0.22em] text-[#6B6B65] uppercase">
+          <span className="h-px w-8 bg-[#A1A19A]" />
+          {t.eyebrow}
+        </p>
+        <h2 className="mt-4 font-display text-[44px] leading-[0.95] tracking-[-0.01em] text-[#0B0B0B] sm:text-[56px]">
+          {t.heroLead} <em className="text-[#F97316]">{t.heroAccent}</em> {t.heroTail}
+        </h2>
+        <p className="mt-5 text-base leading-relaxed text-[#3F3F46]">{t.tagline}</p>
         <p className="mt-2 text-sm leading-relaxed text-[#6B6B65]">
           {mode === "sign-in" ? t.authSignInLead : t.authSignUpLead}
         </p>
@@ -70,7 +78,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
 
       <form
         onSubmit={handleSubmit}
-        className="rounded-2xl border border-[#E5E4DF] bg-white p-5 sm:p-8"
+        className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 sm:p-8"
       >
         <label htmlFor="auth-email" className="block text-sm font-medium text-[#18181B]">
           {t.email}
@@ -126,7 +134,7 @@ export function AuthScreen({ supabase }: { supabase: SupabaseClient }) {
         <button
           type="submit"
           disabled={busy}
-          className="mt-6 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mt-6 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-7 py-3 text-sm font-semibold tracking-wide text-white transition-colors hover:bg-[#3F3F46] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F97316] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span>
             {busy ? t.working : mode === "sign-in" ? t.signIn : t.createAccount}

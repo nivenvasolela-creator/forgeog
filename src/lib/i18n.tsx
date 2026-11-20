@@ -14,6 +14,10 @@ const LANGUAGE_KEY = "forge_language_v1";
 const en = {
   tagline:
     "Your founder operating system: test an idea, get a clear decision, and start executing this week.",
+  heroLead: "Prove it",
+  heroAccent: "before",
+  heroTail: "you build it.",
+  eyebrow: "The founder operating system",
   loading: "Loading...",
   signOut: "Sign out",
   profile: "Profile",
@@ -443,6 +447,10 @@ export type Dictionary = typeof en;
 const sw: Dictionary = {
   tagline:
     "Mfumo wako wa mjasiriamali: pima wazo, pata uamuzi wa wazi, na anza kutekeleza wiki hii.",
+  heroLead: "Thibitisha",
+  heroAccent: "kabla",
+  heroTail: "hujajenga.",
+  eyebrow: "Mfumo wa uendeshaji wa mwanzilishi",
   loading: "Inapakia...",
   signOut: "Toka",
   profile: "Wasifu",

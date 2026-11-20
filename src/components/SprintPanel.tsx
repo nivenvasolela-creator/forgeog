@@ -108,7 +108,7 @@ export function SprintPanel({
           <button
             type="button"
             onClick={onBuild}
-            className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] sm:w-auto"
+            className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-[#3F3F46] sm:w-auto"
           >
             <Rocket className="h-4 w-4" />
             <span>{t.buildSprint}</span>

@@ -22,6 +22,7 @@ import {
   type ChatMessage,
   type ChatSource,
 } from "../lib/askForge";
+import { LogoMark } from "./Logo";
 import { track } from "../lib/track";
 import { RateThis, useFeedback } from "./Feedback";
 
@@ -256,8 +257,8 @@ export function AskForgeScreen({
   const empty = !loading && messages.length === 0;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col bg-[#FAFAF8]">
-      <header className="sticky top-0 z-10 border-b border-[#E5E4DF] bg-white/95 backdrop-blur">
+    <div className="flex min-h-[100dvh] flex-col">
+      <header className="sticky top-0 z-10 border-b border-white/70 bg-white/60 backdrop-blur-xl">
         <div className="mx-auto flex w-full max-w-3xl items-center gap-2 px-4 py-3 sm:px-6">
           <button
             type="button"
@@ -268,9 +269,7 @@ export function AskForgeScreen({
             <ArrowLeft className="h-5 w-5" />
           </button>
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#18181B] text-white">
-              <MessageCircle className="h-4 w-4" />
-            </span>
+            <LogoMark className="h-6 w-[25px] shrink-0" />
             <h1 className="truncate font-display text-lg font-medium tracking-tight text-[#18181B]">
               {t.askForge}
             </h1>
@@ -378,9 +377,7 @@ export function AskForgeScreen({
               </li>
             ) : (
               <li key={m.id} className="flex gap-3">
-                <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-medium text-white">
-                  F
-                </span>
+                <LogoMark className="mt-1 h-5 w-[21px] shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="rounded-2xl rounded-tl-md border border-[#E5E4DF] bg-white px-4 py-3 text-[15px] leading-relaxed break-words text-[#3F3F46]">
                     <RichText text={m.content} sources={m.sources} />
@@ -443,9 +440,7 @@ export function AskForgeScreen({
           )}
           {sending && (
             <li className="flex gap-3">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F97316] font-display text-xs font-medium text-white">
-                F
-              </span>
+              <LogoMark className="mt-1 h-5 w-[21px] shrink-0" />
               <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-md border border-[#E5E4DF] bg-white px-4 py-3 text-sm text-[#6B6B65]">
                 <Loader2 className="h-4 w-4 animate-spin text-[#F97316]" />
                 {slow ? t.askForgeThinkingLong : t.askForgeThinking}
@@ -461,7 +456,7 @@ export function AskForgeScreen({
         <div ref={listEnd} className="h-2" />
       </main>
 
-      <div className="sticky bottom-0 border-t border-[#E5E4DF] bg-white/95 backdrop-blur">
+      <div className="sticky bottom-0 border-t border-white/70 bg-white/60 backdrop-blur-xl">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -490,7 +485,7 @@ export function AskForgeScreen({
             disabled={sending || !draft.trim()}
             aria-label={t.askForgeSend}
             title={t.askForgeSend}
-            className="inline-flex h-[46px] w-[46px] shrink-0 cursor-pointer items-center justify-center rounded-xl bg-[#18181B] text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:bg-[#E5E4DF] disabled:text-[#9B9B94]"
+            className="inline-flex h-[46px] w-[46px] shrink-0 cursor-pointer items-center justify-center rounded-full bg-[#18181B] text-white transition-colors hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:bg-[#E5E4DF] disabled:text-[#9B9B94]"
           >
             {sending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
           </button>

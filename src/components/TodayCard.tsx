@@ -45,7 +45,7 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
   return (
     <section
       aria-labelledby="today-heading"
-      className="mb-6 overflow-hidden rounded-2xl border border-[#E5E4DF] bg-white"
+      className="mb-6 overflow-hidden rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl"
     >
       <div className="flex items-center gap-2 border-b border-[#F0EFEA] px-5 py-3">
         <Sun className="h-4 w-4 text-[#8A8A82]" />
@@ -132,7 +132,7 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
               track("today_open_plan", { hasSprint: Boolean(focus.sprint) });
               onOpenIdea(focus);
             }}
-            className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
+            className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-4 text-sm font-semibold text-white hover:bg-[#3F3F46]"
           >
             {focus.sprint ? t.todayOpenPlan : t.todayBuildSprint}
             <ArrowRight className="h-4 w-4" />

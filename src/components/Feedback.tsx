@@ -176,7 +176,7 @@ function FeedbackDialog({
             <button
               type="button"
               onClick={onClose}
-              className="mt-5 inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl bg-[#18181B] px-5 text-sm font-semibold text-white hover:bg-[#3F3F46]"
+              className="mt-5 inline-flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-full bg-[#18181B] px-5 text-sm font-semibold text-white hover:bg-[#3F3F46]"
             >
               {t.close}
             </button>
@@ -262,7 +262,7 @@ function FeedbackDialog({
             <button
               type="submit"
               disabled={busy}
-              className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#18181B] px-5 text-sm font-semibold text-white hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-5 inline-flex min-h-[48px] w-full cursor-pointer items-center justify-center gap-2 rounded-full bg-[#18181B] px-5 text-sm font-semibold text-white hover:bg-[#3F3F46] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {busy ? t.feedbackSending : t.feedbackSend}

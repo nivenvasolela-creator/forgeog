@@ -106,7 +106,7 @@ const FACES = ["", "1/4", "2/4", "3/4", "4/4"];
 
 function Card({ title, children, className = "" }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className={`rounded-2xl border border-[#E5E4DF] bg-white p-5 ${className}`}>
+    <section className={`rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-5 ${className}`}>
       <h2 className="text-sm font-semibold text-[#18181B]">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
@@ -115,7 +115,7 @@ function Card({ title, children, className = "" }: { title: string; children: Re
 
 function Kpi({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
-    <div className="rounded-2xl border border-[#E5E4DF] bg-white p-4">
+    <div className="rounded-2xl border border-white/80 bg-white/70 shadow-[0_1px_2px_rgba(24,24,27,0.04),0_24px_60px_-36px_rgba(40,48,90,0.35)] backdrop-blur-xl p-4">
       <p className="text-xs font-medium text-[#6B6B65]">{label}</p>
       <p className="mt-1 font-display text-2xl font-medium text-[#18181B] tabular-nums">{value}</p>
       {hint && <p className="mt-0.5 text-xs text-[#9B9B94]">{hint}</p>}
@@ -400,7 +400,7 @@ export function AdminScreen({ supabase, onBack }: { supabase: SupabaseClient; on
                       <button
                         type="button"
                         onClick={() => void setStatus(f.id, "done")}
-                        className="inline-flex min-h-[32px] cursor-pointer items-center gap-1.5 rounded-lg bg-[#18181B] px-2.5 text-xs font-medium text-white hover:bg-[#3F3F46]"
+                        className="inline-flex min-h-[32px] cursor-pointer items-center gap-1.5 rounded-full bg-[#18181B] px-2.5 text-xs font-medium text-white hover:bg-[#3F3F46]"
                       >
                         <Check className="h-3.5 w-3.5" />
                         Mark done
