@@ -116,13 +116,13 @@ const en = {
   phaseRunning: "Running",
   phaseQueued: "Queued",
   nexusNote:
-    "You can close this page. Nexus keeps working and saves the report to your ideas.",
+    "You can close this page. FORGE keeps working and saves the report to your ideas.",
   keepInBackground: "Keep working in the background",
   nexusQuotaWait:
-    "The free AI allowance is used up for now. Nexus will continue automatically when it frees up.",
+    "The free AI allowance is used up for now. FORGE will continue automatically when it frees up.",
 
   // Nexus jobs on the home screen
-  nexusHeading: "Nexus is working",
+  nexusHeading: "FORGE is working",
   nexusAnalyzing: (idea: string) => `Testing: ${idea}`,
   nexusSprinting: (idea: string) => `Building the 7-day sprint for: ${idea}`,
   nexusStep: (step: string) =>
@@ -293,6 +293,65 @@ const en = {
   saving: "Saving...",
   skipForNow: "Skip for now",
   profileSaveFailed: (msg: string) => `Could not save your profile (${msg}).`,
+
+  // Today (home brief)
+  todayMorning: "Good morning",
+  todayAfternoon: "Good afternoon",
+  todayEvening: "Good evening",
+  todayIdea: "You're working on",
+  todaySprintDay: (n: number) => `Today: sprint day ${n}`,
+  todayReady: "Ready for you",
+  todaySprintFinished: "You finished every task in this sprint. Record what you learned in your tests, then re-run the analysis.",
+  todayNoSprint: (call: string) => `FORGE's call: ${call}. Next step: build your 7-day sprint so you know exactly what to do each day.`,
+  todayOpenTests: "Tests still open",
+  todayOpenPlan: "Open today's plan",
+  todayBuildSprint: "Build my 7-day sprint",
+  todayAsk: "Ask FORGE what to do",
+
+  // Ask FORGE
+  askForge: "Ask FORGE",
+  askForgeLead:
+    "Ask anything about your ideas, reports or next steps. FORGE uses your profile, its agents' reports, your tests and your sprint, and searches the web when it needs to.",
+  askForgeAbout: (title: string) => `Talking about: ${title}`,
+  askForgeAllIdeas: "All my ideas",
+  askForgeFocus: "Focus",
+  askForgePlaceholder: "Ask a question, raise a worry, or ask FORGE to explain something...",
+  askForgeSend: "Send",
+  askForgeThinking: "FORGE is thinking...",
+  askForgeThinkingLong: "FORGE is checking the web...",
+  askForgeClear: "Clear chat",
+  askForgeClearConfirm: "Delete this whole conversation? This cannot be undone.",
+  askForgeFailed: (msg: string) => `FORGE could not answer (${msg}).`,
+  askForgeRetry: "Send again",
+  askForgeSources: "Sources",
+  askForgeViaTelegram: "via Telegram",
+  askForgeUnavailable: "Ask FORGE works on the hosted version of FORGE only.",
+  askForgeSuggestions: [
+    "What should I do today?",
+    "Explain my score in simple words",
+    "What is the biggest risk in my idea, and how do I test it cheaply?",
+    "How do I register a business in Tanzania?",
+  ],
+  actionRunAnalysis: "Test this idea",
+  actionOpenIdea: (title: string) => `Open “${title}”`,
+  actionBuildSprint: (title: string) => `Build sprint for “${title}”`,
+  actionEditProfile: "Update my profile",
+  askAboutIdea: "Ask FORGE",
+
+  // Telegram
+  telegramHeading: "FORGE on Telegram",
+  telegramLead:
+    "Get a short brief every morning at 7:00 (Tanzania time) with today's sprint tasks, and ask FORGE questions straight from Telegram.",
+  telegramConnect: "Connect Telegram",
+  telegramOpening: "Preparing your link...",
+  telegramWaiting: "Telegram opened in a new tab. Press Start in the chat with the FORGE bot to finish connecting.",
+  telegramOpenAgain: "Open Telegram again",
+  telegramConnected: "Connected",
+  telegramBrief: "Morning brief",
+  telegramBriefOn: "On",
+  telegramBriefOff: "Off",
+  telegramDisconnect: "Disconnect",
+  telegramFailed: (msg: string) => `Could not connect Telegram (${msg}).`,
 };
 
 export type Dictionary = typeof en;
@@ -395,12 +454,12 @@ const sw: Dictionary = {
   phaseRunning: "Inaendelea",
   phaseQueued: "Inasubiri",
   nexusNote:
-    "Unaweza kufunga ukurasa huu. Nexus inaendelea kufanya kazi na kuhifadhi ripoti kwenye mawazo yako.",
+    "Unaweza kufunga ukurasa huu. FORGE inaendelea kufanya kazi na kuhifadhi ripoti kwenye mawazo yako.",
   keepInBackground: "Endelea kufanya kazi nyuma",
   nexusQuotaWait:
-    "Kiwango cha bure cha AI kimeisha kwa sasa. Nexus itaendelea yenyewe kikipatikana tena.",
+    "Kiwango cha bure cha AI kimeisha kwa sasa. FORGE itaendelea yenyewe kikipatikana tena.",
 
-  nexusHeading: "Nexus inafanya kazi",
+  nexusHeading: "FORGE inafanya kazi",
   nexusAnalyzing: (idea) => `Inapima: ${idea}`,
   nexusSprinting: (idea) => `Inatengeneza mpango wa siku 7 wa: ${idea}`,
   nexusStep: (step) =>
@@ -565,6 +624,65 @@ const sw: Dictionary = {
   saving: "Inahifadhi...",
   skipForNow: "Ruka kwa sasa",
   profileSaveFailed: (msg) => `Imeshindikana kuhifadhi wasifu wako (${msg}).`,
+
+  // Today (home brief)
+  todayMorning: "Habari ya asubuhi",
+  todayAfternoon: "Habari ya mchana",
+  todayEvening: "Habari ya jioni",
+  todayIdea: "Unafanyia kazi",
+  todaySprintDay: (n: number) => `Leo: siku ya ${n} ya sprint`,
+  todayReady: "Tayari kwako",
+  todaySprintFinished: "Umemaliza kazi zote za sprint hii. Andika ulichojifunza kwenye majaribio yako, kisha endesha uchambuzi upya.",
+  todayNoSprint: (call: string) => `Uamuzi wa FORGE: ${call}. Hatua inayofuata: tengeneza sprint yako ya siku 7 ili ujue cha kufanya kila siku.`,
+  todayOpenTests: "Majaribio yaliyo wazi",
+  todayOpenPlan: "Fungua mpango wa leo",
+  todayBuildSprint: "Tengeneza sprint yangu ya siku 7",
+  todayAsk: "Uliza FORGE nifanye nini",
+
+  // Ask FORGE
+  askForge: "Uliza FORGE",
+  askForgeLead:
+    "Uliza chochote kuhusu mawazo yako, ripoti au hatua zinazofuata. FORGE inatumia wasifu wako, ripoti za mawakala wake, majaribio yako na sprint yako, na hutafuta mtandaoni inapohitajika.",
+  askForgeAbout: (title: string) => `Tunazungumzia: ${title}`,
+  askForgeAllIdeas: "Mawazo yangu yote",
+  askForgeFocus: "Lengo",
+  askForgePlaceholder: "Uliza swali, eleza wasiwasi, au omba FORGE ikueleze jambo...",
+  askForgeSend: "Tuma",
+  askForgeThinking: "FORGE inafikiri...",
+  askForgeThinkingLong: "FORGE inakagua mtandaoni...",
+  askForgeClear: "Futa mazungumzo",
+  askForgeClearConfirm: "Ufute mazungumzo yote haya? Hili haliwezi kurudishwa.",
+  askForgeFailed: (msg: string) => `FORGE haikuweza kujibu (${msg}).`,
+  askForgeRetry: "Tuma tena",
+  askForgeSources: "Vyanzo",
+  askForgeViaTelegram: "kupitia Telegram",
+  askForgeUnavailable: "Uliza FORGE inafanya kazi kwenye toleo la mtandaoni la FORGE pekee.",
+  askForgeSuggestions: [
+    "Nifanye nini leo?",
+    "Nieleze alama yangu kwa maneno rahisi",
+    "Hatari kubwa zaidi ya wazo langu ni ipi, na naijaribu vipi kwa gharama ndogo?",
+    "Nasajili vipi biashara Tanzania?",
+  ],
+  actionRunAnalysis: "Jaribu wazo hili",
+  actionOpenIdea: (title: string) => `Fungua “${title}”`,
+  actionBuildSprint: (title: string) => `Tengeneza sprint ya “${title}”`,
+  actionEditProfile: "Sasisha wasifu wangu",
+  askAboutIdea: "Uliza FORGE",
+
+  // Telegram
+  telegramHeading: "FORGE kwenye Telegram",
+  telegramLead:
+    "Pata muhtasari mfupi kila asubuhi saa 1:00 wenye kazi za leo za sprint, na uliza FORGE maswali moja kwa moja kutoka Telegram.",
+  telegramConnect: "Unganisha Telegram",
+  telegramOpening: "Inaandaa kiungo chako...",
+  telegramWaiting: "Telegram imefunguka kwenye kichupo kipya. Bonyeza Start kwenye mazungumzo na bot ya FORGE ili kumaliza kuunganisha.",
+  telegramOpenAgain: "Fungua Telegram tena",
+  telegramConnected: "Imeunganishwa",
+  telegramBrief: "Muhtasari wa asubuhi",
+  telegramBriefOn: "Umewashwa",
+  telegramBriefOff: "Umezimwa",
+  telegramDisconnect: "Tenganisha",
+  telegramFailed: (msg: string) => `Imeshindwa kuunganisha Telegram (${msg}).`,
 };
 
 const DICTIONARIES: Record<Language, Dictionary> = { en, sw };
