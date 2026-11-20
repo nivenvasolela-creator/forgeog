@@ -76,6 +76,9 @@ interface RawReport {
     };
     confidence: "low" | "medium" | "high";
     rationale: string;
+    opportunity: number;
+    readiness: number;
+    readiness_gaps: string[];
   };
   swot: {
     strengths: string[];
@@ -100,6 +103,7 @@ interface RawReport {
   };
   grounding_flags: string[];
   sources: VerifiedSource[];
+  regulation: Array<{ area: string; why: string; check_with: string }>;
   decision: {
     call: "go" | "pivot" | "kill";
     reason: string;
@@ -264,8 +268,24 @@ const REPORT_SCHEMA: SchemaNode = {
           type: "STRING",
           description: "Direct plain-language verdict explaining the overall score.",
         },
+        opportunity: {
+          type: "INTEGER",
+          description:
+            "0-100: how attractive the opportunity is on its own (real problem, demand, willingness to pay, room against competitors). Judge it as you would for any founder: ignore this founder's money, skills and time.",
+        },
+        readiness: {
+          type: "INTEGER",
+          description:
+            "0-100: how ready THIS founder is to pursue it right now, given their skills, experience, money, time, location and access. Use the founder profile; if it is empty, score conservatively.",
+        },
+        readiness_gaps: {
+          type: "ARRAY",
+          items: { type: "STRING" },
+          description:
+            "The 1-3 biggest gaps between this founder and this opportunity, each with a cheap way to close it (e.g. 'No medical background: partner with a nurse or clinic owner'). Empty if there are none.",
+        },
       },
-      required: ["overall", "breakdown", "confidence", "rationale"],
+      required: ["overall", "breakdown", "confidence", "rationale", "opportunity", "readiness", "readiness_gaps"],
     },
     swot: {
       type: "OBJECT",
@@ -366,6 +386,24 @@ const REPORT_SCHEMA: SchemaNode = {
       description:
         "List of claims, competitor details, or market numbers that could not be verified from search sources.",
     },
+    regulation: {
+      type: "ARRAY",
+      description:
+        "Licences, permits and rules this idea likely needs before it can operate legally: health, medicines, food, money (payments, lending, savings, insurance), transport, education, alcohol, personal data, telecoms, import/export, construction, security. Empty array when the idea touches none of these.",
+      items: {
+        type: "OBJECT",
+        properties: {
+          area: { type: "STRING", description: "Short name of the regulated area, e.g. 'Handling patient data'." },
+          why: { type: "STRING", description: "One sentence: what in this idea triggers it and what can go wrong without it." },
+          check_with: {
+            type: "STRING",
+            description:
+              "Who to check with: the kind of authority (e.g. 'the national medicines and medical devices regulator'). Add the authority's name only if you are certain of it for the founder's country.",
+          },
+        },
+        required: ["area", "why", "check_with"],
+      },
+    },
     sources: {
       type: "ARRAY",
       items: {
@@ -389,6 +427,7 @@ const REPORT_SCHEMA: SchemaNode = {
     "decision",
     "grounding_flags",
     "sources",
+    "regulation",
   ],
 };
 
@@ -516,6 +555,13 @@ export interface ScoutResult {
   flags: string[];
 }
 
+export interface CheckedClaim {
+  claim: string;
+  verdict: "supported" | "unsupported" | "contradicted" | "labelled_estimate";
+  /** The source that backs or contradicts it, when there is one. */
+  source_url: string;
+}
+
 export interface SkepticSummary {
   /** Claims and competitors the Skeptic checked against the sources. */
   checked: number;
@@ -526,6 +572,8 @@ export interface SkepticSummary {
   unsupported: string[];
   /** The strongest argument against the idea. */
   counterargument: string;
+  /** Every claim checked, with its verdict and source. */
+  claims?: CheckedClaim[];
 }
 
 export type ForgeReport = ReturnType<typeof buildReport>;
@@ -628,6 +676,12 @@ export async function stepScout(
   return { researchNotes, sources, flags };
 }
 
+/** A 0-100 score, or null when the model left it out. */
+function optionalScore(value: unknown): number | null {
+  const num = typeof value === "string" ? Number(value) : value;
+  return typeof num === "number" && Number.isFinite(num) ? Math.round(clamp(num, 0, 100)) : null;
+}
+
 function buildReport(parsed: Partial<RawReport>, scout: ScoutResult) {
   const verifiedSources = scout.sources;
   // Enforce strict grounding integrity on server output
@@ -687,6 +741,10 @@ function buildReport(parsed: Partial<RawReport>, scout: ScoutResult) {
         (c) => c === parsed.idea_score?.confidence
       ) ?? ("low" as "low" | "medium" | "high"),
       rationale: str(parsed.idea_score?.rationale),
+      // Missing (null) when an open model skipped them; the app then hides the split.
+      opportunity: optionalScore(parsed.idea_score?.opportunity),
+      readiness: optionalScore(parsed.idea_score?.readiness),
+      readiness_gaps: strList(parsed.idea_score?.readiness_gaps).slice(0, 3),
     },
     swot: {
       strengths: strList(parsed.swot?.strengths),
@@ -721,6 +779,14 @@ function buildReport(parsed: Partial<RawReport>, scout: ScoutResult) {
     },
     grounding_flags: Array.from(finalFlags),
     sources: verifiedSources,
+    regulation: (Array.isArray(parsed.regulation) ? parsed.regulation : [])
+      .map((r) => ({
+        area: str(r?.area).slice(0, 120),
+        why: str(r?.why).slice(0, 400),
+        check_with: str(r?.check_with).slice(0, 200),
+      }))
+      .filter((r) => r.area && r.why)
+      .slice(0, 6),
     skeptic: null as SkepticSummary | null,
   };
 }
@@ -764,6 +830,9 @@ RULES:
 - Score honestly: overall 0-100, each breakdown 0-10. Weak ideas should get weak scores.
 - founder_fit: judge it against the FOUNDER PROFILE (skills, background, time, money, location) and anything the founder wrote about themselves. If neither says anything about the founder, score founder_fit conservatively (e.g. 3-5) and note in grounding_flags that founder background was not provided.
 - Tailor go_to_market, pricing and validate_next to the founder's country, city, budget and time when the profile gives them. A founder with little money needs steps that cost little or nothing.
+- opportunity and readiness: score them separately. The opportunity must not drop because this founder has little money or experience; that belongs in readiness. Explain both briefly in the rationale.
+- If the opportunity is good (roughly 60+) but readiness is low, do not call it "kill": call "pivot" and give pivots that are smaller entry points this founder can start now (a narrower customer, a service before software, one partner first). Use "kill" only when the opportunity itself is weak.
+- regulation: list every licence, permit or rule the idea likely needs, especially for health, medicines, food, money, transport, education and personal data. Never say or imply the idea is compliant or legal; tell the founder what to check. Name an authority only when you are certain it is the right one for the founder's country.
 - decision: make one clear call. Use "go" only when the idea is worth executing now (roughly overall >= 60 with no fatal flaw). Use "kill" when the core problem or market looks fundamentally weak. Otherwise "pivot". For pivot or kill, give 2-3 concrete alternative ideas built on what is strongest here; for go, give an empty pivots array.
 - Competitors: ONLY include competitors backed by the grounded research notes and verified sources above. Every competitor's source_index MUST be the number of the VERIFIED SOURCES entry that backs it, or 0 if none does. If no verified sources exist, leave competitors as [] and include "Could not verify competitors" in grounding_flags.
 - Founder experiments: treat reported results as real but self-reported evidence. A result that went against the idea must lower the relevant scores and appear in weaknesses or key_risks. A supporting result only raises scores as far as its notes give specifics (who, how many, what they did or paid); vague or missing notes earn little. Say in the rationale which results moved the score. Add one grounding_flags entry stating that experiment results are self-reported. Do not repeat a finished experiment in validate_next; suggest what to test next instead.
@@ -813,6 +882,10 @@ const SKEPTIC_SCHEMA: SchemaNode = {
         type: "OBJECT",
         properties: {
           claim: { type: "STRING", description: "The claim, quoted or closely paraphrased." },
+          source_number: {
+            type: "INTEGER",
+            description: "The number of the extract that supports or contradicts the claim; 0 if none does.",
+          },
           verdict: {
             type: "STRING",
             enum: ["supported", "unsupported", "contradicted", "labelled_estimate"],
@@ -820,7 +893,7 @@ const SKEPTIC_SCHEMA: SchemaNode = {
               "supported: a source extract states it. contradicted: an extract says otherwise. labelled_estimate: the report already presents it as an estimate or assumption. unsupported: none of the above.",
           },
         },
-        required: ["claim", "verdict"],
+        required: ["claim", "source_number", "verdict"],
       },
     },
     strongest_objection: {
@@ -866,6 +939,7 @@ export async function stepSkeptic(
       : "None.";
   const reportText = [
     `Rationale: ${report.idea_score.rationale}`,
+    `Problem: ${report.blueprint.problem}`,
     `Market size: ${report.business_plan.tam_estimate}`,
     `Pricing: ${report.business_plan.pricing_hypothesis}`,
     `Go-to-market: ${report.business_plan.go_to_market}`,
@@ -903,7 +977,7 @@ Check every competitor against the extract of the source it cites. Then pick up 
     })
   )) as {
     competitor_checks?: Array<{ competitor_number?: unknown; supported?: unknown }>;
-    claim_checks?: Array<{ claim?: unknown; verdict?: unknown }>;
+    claim_checks?: Array<{ claim?: unknown; verdict?: unknown; source_number?: unknown }>;
     strongest_objection?: unknown;
   } | null;
 
@@ -918,8 +992,18 @@ Check every competitor against the extract of the source it cites. Then pick up 
   const removed = competitors.filter((_, i) => rejected.has(i)).map((c) => c.name);
 
   const claims = (Array.isArray(parsed?.claim_checks) ? parsed!.claim_checks : [])
-    .map((c) => ({ claim: str(c?.claim).slice(0, 300), verdict: str(c?.verdict) }))
-    .filter((c) => c.claim && c.verdict)
+    .map((c) => {
+      const verdict = str(c?.verdict);
+      const n = Number(c?.source_number);
+      const source = Number.isInteger(n) && n >= 1 ? scout.sources[n - 1] : undefined;
+      return {
+        claim: str(c?.claim).slice(0, 300),
+        verdict,
+        // A link only makes sense when the source backs or contradicts the claim.
+        source_url: source && (verdict === "supported" || verdict === "contradicted") ? source.url : "",
+      };
+    })
+    .filter((c) => c.claim && ["supported", "unsupported", "contradicted", "labelled_estimate"].includes(c.verdict))
     .slice(0, 8);
   const unsupported = claims
     .filter((c) => c.verdict === "unsupported" || c.verdict === "contradicted")
@@ -951,6 +1035,7 @@ Check every competitor against the extract of the source it cites. Then pick up 
       removed,
       unsupported,
       counterargument: withoutNames(str(parsed?.strongest_objection), removed).slice(0, 600),
+      claims: claims as CheckedClaim[],
     },
   };
 }

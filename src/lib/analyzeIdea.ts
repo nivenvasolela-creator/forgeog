@@ -38,6 +38,12 @@ export interface ForgeReportData {
     };
     confidence: "low" | "medium" | "high";
     rationale: string;
+    /** 0-100: the opportunity on its own. Missing on older reports. */
+    opportunity?: number | null;
+    /** 0-100: this founder's readiness right now. Missing on older reports. */
+    readiness?: number | null;
+    /** How to close the gap between founder and opportunity. */
+    readiness_gaps?: string[];
   };
   swot: {
     strengths: string[];
@@ -66,6 +72,20 @@ export interface ForgeReportData {
   skeptic?: SkepticSummary | null;
   grounding_flags: string[];
   sources: ForgeSource[];
+  /** Licences and rules to check before operating. Missing on older reports. */
+  regulation?: RegulationItem[];
+}
+
+export interface RegulationItem {
+  area: string;
+  why: string;
+  check_with: string;
+}
+
+export interface CheckedClaim {
+  claim: string;
+  verdict: "supported" | "unsupported" | "contradicted" | "labelled_estimate";
+  source_url: string;
 }
 
 export type DecisionCall = "go" | "pivot" | "kill";
@@ -81,6 +101,8 @@ export interface SkepticSummary {
   unsupported: string[];
   /** The strongest argument against the idea. */
   counterargument: string;
+  /** Every claim checked, with verdict and source. Missing on older reports. */
+  claims?: CheckedClaim[];
 }
 
 export interface ForgeDecision {

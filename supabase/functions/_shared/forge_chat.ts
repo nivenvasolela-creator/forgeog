@@ -187,6 +187,13 @@ export async function loadFounderContext(
       const skeptic = report.skeptic;
       lines.push(
         `  Score breakdown (0-10): problem clarity ${b.problem_clarity ?? "?"}, market signal ${b.market_signal ?? "?"}, founder fit ${b.founder_fit ?? "?"}, feasibility ${b.feasibility ?? "?"}, differentiation ${b.differentiation ?? "?"}`,
+        `  Opportunity (the market on its own): ${score.opportunity ?? "?"}/100; founder readiness (this founder, now): ${score.readiness ?? "?"}/100`,
+        `  Readiness gaps: ${strList(score.readiness_gaps).join(" | ") || "none listed"}`,
+        `  Licences and rules to check: ${
+          (Array.isArray(report.regulation) ? report.regulation : [])
+            .map((r: Record<string, unknown>) => `${str(r.area)} (${short(r.check_with, 80)})`)
+            .join("; ") || "none flagged"
+        }`,
         `  Why this score: ${short(score.rationale, 600)}`,
         `  Problem: ${short(bp.problem, 300)}`,
         `  Target user: ${short(bp.target_user, 200)}`,
@@ -314,7 +321,9 @@ How to answer:
 - Explain jargon (TAM, MVP, unit economics...) in plain words with a local example when useful.
 - When the founder is worried or stuck, name the real risk, then give the smallest next step they can take today.
 - Tanzania registration questions: BRELA registers business names and companies (online at ors.brela.go.tz), TRA issues the TIN and handles tax, and the local council issues the business licence. Tell them to confirm current fees on the official sites.
-- If they describe a new or changed idea, offer a run_analysis action so FORGE's agents test it properly.`;
+- If they describe a new or changed idea, offer a run_analysis action so FORGE's agents test it properly.
+- If the founder has no ideas in FORGE yet, do not give a generic answer. Help them find a first idea: ask one or two short questions about problems they see every day, their skills and who they know, or suggest 2-3 concrete small business ideas that fit their profile and location, then offer a run_analysis action for the most promising one.
+- Readiness is not destiny: when a founder's readiness is low, show the smallest version they can start now and how to close the gap (a partner, a skill, a cheaper first step).`;
 
 const ACTION_TYPES = new Set(["run_analysis", "open_idea", "build_sprint", "edit_profile"]);
 
