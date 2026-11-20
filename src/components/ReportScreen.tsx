@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   Copy,
+  MessageSquareHeart,
   ExternalLink,
   Plus,
   RefreshCw,
@@ -17,10 +18,11 @@ import type { ExperimentPatch } from "../lib/store";
 import { DecisionCard } from "./DecisionCard";
 import { SkepticCard } from "./SkepticCard";
 import { RegulationCard } from "./RegulationCard";
-import { RateThis } from "./Feedback";
+import { RateThis, useFeedback } from "./Feedback";
 import { track } from "../lib/track";
 import { SprintPanel } from "./SprintPanel";
 import { ValidationPlan } from "./ValidationPlan";
+import { ReportDeck } from "./ReportDeck";
 
 interface ReportScreenProps {
   idea: Idea;
@@ -30,8 +32,8 @@ interface ReportScreenProps {
   warning: string | null;
   onBack: () => void;
   onNewIdea: () => void;
-  /** Opens Ask FORGE focused on this idea. */
-  onAsk?: () => void;
+  /** Opens Ask FORGE focused on this idea, optionally asking a question straight away. */
+  onAsk?: (question?: string) => void;
   onRevise: () => void;
   onDelete: () => void;
   planDisabled: boolean;
@@ -77,6 +79,13 @@ export function ReportScreen({
 }: ReportScreenProps) {
   const { t } = useI18n();
   const [copied, setCopied] = useState(false);
+  const feedback = useFeedback();
+  // Cards first: the report in brief. The sprint, tests and full detail are a tap away.
+  const [view, setView] = useState<"cards" | "plan" | "full">("cards");
+  const openView = (next: "cards" | "plan" | "full") => {
+    setView(next);
+    track("report_view", { view: next });
+  };
   // Versions are stored newest first; number them oldest = v1.
   const versionIndex = Math.max(
     0,
@@ -160,7 +169,7 @@ export function ReportScreen({
             {onAsk && (
               <button
                 type="button"
-                onClick={onAsk}
+                onClick={() => onAsk()}
                 className="inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#18181B] bg-white px-4 py-2 text-sm font-semibold text-[#18181B] transition-colors hover:bg-[#18181B] hover:text-white whitespace-nowrap shrink-0"
               >
                 <MessageCircle className="h-4 w-4" />
@@ -197,6 +206,17 @@ export function ReportScreen({
               })}
             </p>
           </div>
+          <div className="flex shrink-0 items-center gap-4">
+          {feedback.available && (
+            <button
+              type="button"
+              onClick={() => feedback.open({ context: { target: "report" } })}
+              className="inline-flex min-h-[36px] cursor-pointer items-center gap-1.5 text-xs font-medium text-[#575752] underline underline-offset-4 hover:text-[#18181B]"
+            >
+              <MessageSquareHeart className="h-3.5 w-3.5" />
+              <span>{t.feedbackButton}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={onDelete}
@@ -205,6 +225,7 @@ export function ReportScreen({
             <Trash2 className="h-3.5 w-3.5" />
             <span>{t.deleteIdea}</span>
           </button>
+          </div>
         </div>
 
         {idea.versions.length > 1 && (
@@ -243,6 +264,72 @@ export function ReportScreen({
         )}
       </header>
 
+      <div
+        role="tablist"
+        aria-label={idea.title}
+        className="mb-5 inline-flex w-full rounded-2xl border border-[#E5E4DF] bg-white p-1 sm:w-auto"
+      >
+        {(
+          [
+            ["cards", t.deckTabCards],
+            ["plan", t.deckTabPlan],
+            ["full", t.deckTabFull],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={view === key}
+            onClick={() => openView(key)}
+            className={`min-h-[40px] flex-1 cursor-pointer rounded-xl px-4 text-sm font-semibold whitespace-nowrap transition-colors sm:flex-none ${
+              view === key ? "bg-[#18181B] text-white" : "text-[#575752] hover:text-[#18181B]"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {view === "cards" && (
+        <ReportDeck
+          idea={idea}
+          data={data}
+          isLatest={versionIndex === 0 && !planDisabled}
+          onAsk={onAsk ? (q) => onAsk(q) : undefined}
+          onTestIdea={onTestIdea}
+          onBuildSprint={onBuildSprint}
+          sprintBuilding={sprintBuilding}
+          onOpenPlan={() => openView("plan")}
+          onOpenFull={() => openView("full")}
+        />
+      )}
+
+      {view === "plan" && (
+        <div className="space-y-6">
+          {versionIndex === 0 && (
+            <SprintPanel
+              sprint={idea.sprint}
+              disabled={planDisabled}
+              building={sprintBuilding}
+              error={sprintError}
+              showProfileTip={showProfileTip}
+              onBuild={onBuildSprint}
+              onToggleTask={onToggleSprintTask}
+            />
+          )}
+          <ValidationPlan
+            experiments={idea.experiments}
+            disabled={planDisabled}
+            onAdd={(title) => onAddExperiments([title])}
+            onUpdate={onUpdateExperiment}
+            onDelete={onDeleteExperiment}
+            onRerun={onRevise}
+          />
+        </div>
+      )}
+
+      {view === "full" && (
       <div className="space-y-6">
         {/* Hero Verdict + Breakdown */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
@@ -406,18 +493,6 @@ export function ReportScreen({
           />
         </div>
 
-        {versionIndex === 0 && (
-          <SprintPanel
-            sprint={idea.sprint}
-            disabled={planDisabled}
-            building={sprintBuilding}
-            error={sprintError}
-            showProfileTip={showProfileTip}
-            onBuild={onBuildSprint}
-            onToggleTask={onToggleSprintTask}
-          />
-        )}
-
         {/* Clearly visible "What I couldn't verify" Card */}
         <section
           aria-labelledby="unverified-heading"
@@ -452,15 +527,6 @@ export function ReportScreen({
             </div>
           </div>
         </section>
-
-        <ValidationPlan
-          experiments={idea.experiments}
-          disabled={planDisabled}
-          onAdd={(title) => onAddExperiments([title])}
-          onUpdate={onUpdateExperiment}
-          onDelete={onDeleteExperiment}
-          onRerun={onRevise}
-        />
 
         {/* SWOT 2x2 Grid */}
         <section className="rounded-2xl border border-[#E5E4DF] bg-white p-6 sm:p-8">
@@ -699,6 +765,7 @@ export function ReportScreen({
           </section>
         </div>
       </div>
+      )}
     </div>
   );
 }

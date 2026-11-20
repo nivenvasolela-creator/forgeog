@@ -30,6 +30,9 @@ interface AskForgeScreenProps {
   ideas: Array<{ id: string; title: string }>;
   /** The idea the founder came from, if any. */
   initialIdeaId: string | null;
+  /** Sent automatically once the history has loaded. */
+  initialQuestion?: string | null;
+  onQuestionSent?: () => void;
   onBack: () => void;
   onAction: (action: ChatAction) => void;
 }
@@ -127,6 +130,8 @@ export function AskForgeScreen({
   supabase,
   ideas,
   initialIdeaId,
+  initialQuestion,
+  onQuestionSent,
   onBack,
   onAction,
 }: AskForgeScreenProps) {
@@ -237,6 +242,16 @@ export function AskForgeScreen({
       setError(err instanceof Error ? err.message : String(err));
     }
   };
+
+  // A question handed over from a report card is asked once, after the history loads.
+  const askedInitial = useRef(false);
+  useEffect(() => {
+    if (loading || askedInitial.current || !initialQuestion) return;
+    askedInitial.current = true;
+    onQuestionSent?.();
+    void send(initialQuestion);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, initialQuestion]);
 
   const empty = !loading && messages.length === 0;
 
