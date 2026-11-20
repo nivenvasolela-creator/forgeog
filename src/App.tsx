@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./components/AuthScreen";
 import { InputScreen } from "./components/InputScreen";
@@ -7,6 +7,9 @@ import { ReportScreen } from "./components/ReportScreen";
 import { WorkingScreen } from "./components/WorkingScreen";
 import { AskForgeScreen } from "./components/AskForgeScreen";
 import { TelegramCard } from "./components/TelegramCard";
+import { FeedbackProvider } from "./components/Feedback";
+import { AdminScreen, checkIsAdmin } from "./components/AdminScreen";
+import { setTrackingUser, startTracking, track, trackScreen } from "./lib/track";
 import { askForgeAvailable, type ChatAction } from "./lib/askForge";
 import {
   analyzeIdea,
@@ -42,7 +45,7 @@ import {
 } from "./lib/store";
 import { supabase } from "./lib/supabase";
 
-type FlowScreen = "home" | "working" | "idea" | "profile" | "ask";
+type FlowScreen = "home" | "working" | "idea" | "profile" | "ask" | "admin";
 
 const PROFILE_SKIPPED_KEY = "forge_profile_skipped_v1";
 
@@ -132,6 +135,29 @@ export default function App() {
   // Ask FORGE: the idea it opened on, and the screen to go back to.
   const [askIdeaId, setAskIdeaId] = useState<string | null>(null);
   const [askReturn, setAskReturn] = useState<"home" | "idea">("home");
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  // Analytics: who is signed in, which screen they are on, language switches.
+  useEffect(() => {
+    startTracking();
+  }, []);
+  useEffect(() => {
+    const userId = session?.user.id ?? null;
+    setTrackingUser(userId ? supabase : null, userId);
+    setIsAdmin(false);
+    if (supabase && userId) void checkIsAdmin(supabase).then(setIsAdmin);
+  }, [session?.user.id]);
+  useEffect(() => {
+    trackScreen(screen);
+  }, [screen]);
+  const firstLang = useRef(true);
+  useEffect(() => {
+    if (firstLang.current) {
+      firstLang.current = false;
+      return;
+    }
+    track("language_changed", { lang });
+  }, [lang]);
   const [activeIdeaId, setActiveIdeaId] = useState<string | null>(null);
   const [activeVersionId, setActiveVersionId] = useState<string | null>(null);
   const [revisingIdeaId, setRevisingIdeaId] = useState<string | null>(null);
@@ -322,6 +348,7 @@ export default function App() {
     foregroundJobRef.current = null;
 
     if (job.status === "needs_input") {
+      track("clarification_asked");
       answeringJobRef.current = job.id;
       setClarifyingQuestion(job.result?.question ?? "");
       setClarificationAnswer("");
@@ -341,6 +368,10 @@ export default function App() {
     setIdeas(loaded);
     void refreshActiveJobs();
     const ideaId = job.result?.ideaId ?? null;
+    track("analysis_done", {
+      decision: loaded.find((i) => i.id === ideaId)?.versions[0]?.data.decision?.call ?? "",
+      background: false,
+    });
     setActiveIdeaId(ideaId);
     setActiveVersionId(null);
     rememberActiveIdea(ideaId);
@@ -349,6 +380,7 @@ export default function App() {
   };
 
   const handleKeepInBackground = () => {
+    track("analysis_background");
     foregroundJobRef.current = null;
     setWaitingForQuota(false);
     resetDraft();
@@ -386,6 +418,11 @@ export default function App() {
     displayPhaseRef.current = 0;
     setActivePhaseIndex(0);
     setScreen("working");
+    track("analysis_started", {
+      revising: Boolean(revisingIdeaId),
+      clarified: Boolean(clarificationText?.trim()),
+      length: trimmedIdea.length,
+    });
 
     if (supabase && nexusAvailable(supabase)) {
       try {
@@ -393,6 +430,7 @@ export default function App() {
       } catch (err) {
         foregroundJobRef.current = null;
         const message = errorText(err, t.analysisFailed);
+        track("analysis_failed", { message });
         setErrorMessage(isQuotaError(message) ? t.aiLimitReached : message);
         setScreen("home");
       }
@@ -422,6 +460,7 @@ export default function App() {
       });
 
       if (result.status === "clarification_needed") {
+        track("clarification_asked");
         setClarifyingQuestion(result.question);
         setClarificationAnswer("");
         setScreen("home");
@@ -472,6 +511,7 @@ export default function App() {
         setSaveWarning(t.reportNotSaved(errorText(saveErr, t.unknownError)));
       }
 
+      track("analysis_done", { decision: result.report.decision?.call ?? "", background: false });
       setIdeas((prev) => [saved, ...prev.filter((i) => i.id !== saved.id)]);
       setActiveIdeaId(saved.id);
       setActiveVersionId(null);
@@ -480,6 +520,7 @@ export default function App() {
       setScreen("idea");
     } catch (err) {
       const message = errorText(err, t.analysisFailed);
+      track("analysis_failed", { message });
       setErrorMessage(isQuotaError(message) ? t.aiLimitReached : message);
       setScreen("home");
     }
@@ -514,6 +555,7 @@ export default function App() {
   };
 
   const openAsk = (ideaId: string | null) => {
+    track("ask_opened", { from: ideaId ? "idea" : "home" });
     setAskIdeaId(ideaId);
     setAskReturn(screen === "idea" ? "idea" : "home");
     setScreen("ask");
@@ -521,6 +563,7 @@ export default function App() {
   };
 
   const handleChatAction = (action: ChatAction) => {
+    track("ask_action", { type: action.type });
     if (action.type === "run_analysis") {
       handleTestIdea(action.ideaText);
       return;
@@ -536,6 +579,7 @@ export default function App() {
   };
 
   const handleRevise = (idea: Idea) => {
+    track("revise_started");
     const latest = idea.versions[0];
     resetDraft();
     setRevisingIdeaId(idea.id === UNSAVED_IDEA_ID ? null : idea.id);
@@ -561,6 +605,7 @@ export default function App() {
 
   const handleBuildSprint = async (idea: Idea) => {
     if (sprintBuildingFor) return;
+    track("sprint_requested");
     setSprintBuildingFor(idea.id);
     setSprintError(null);
     if (supabase && nexusAvailable(supabase)) {
@@ -576,9 +621,11 @@ export default function App() {
           throw new Error(job.error === "quota" ? t.aiLimitReached : job.error || t.unknownError);
         }
         await reloadIdeas();
+        track("sprint_built");
         void refreshActiveJobs();
       } catch (err) {
         const message = errorText(err, t.unknownError);
+        track("sprint_failed", { message });
         setSprintError({
           ideaId: idea.id,
           message: isQuotaError(message) ? t.aiLimitReached : t.sprintFailed(message),
@@ -597,6 +644,7 @@ export default function App() {
       const plan = await buildSprintPlan(idea, { accessToken, profile, language: lang });
       const sprint: Sprint = { plan, done: [], createdAt: new Date().toISOString() };
       setIdeaSprint(idea.id, sprint);
+      track("sprint_built");
       try {
         await store.saveSprint(idea.id, sprint);
       } catch (err) {
@@ -607,6 +655,7 @@ export default function App() {
       }
     } catch (err) {
       const message = errorText(err, t.unknownError);
+      track("sprint_failed", { message });
       setSprintError({
         ideaId: idea.id,
         message: isQuotaError(message) ? t.aiLimitReached : t.sprintFailed(message),
@@ -623,6 +672,7 @@ export default function App() {
       ? idea.sprint.done.filter((k) => k !== key)
       : [...idea.sprint.done, key];
     const next = { ...idea.sprint, done };
+    track("sprint_task_toggled", { done: done.includes(key) });
     setIdeaSprint(idea.id, next);
     store.saveSprint(idea.id, next).catch((err) =>
       setSprintError({
@@ -634,6 +684,9 @@ export default function App() {
 
   const handleSaveProfile = async (next: FounderProfile) => {
     await profileStore.save(next);
+    track("profile_saved", {
+      fields: Object.values(next).filter((v) => typeof v === "string" && v.trim() !== "").length,
+    });
     setProfile(next);
     setScreen(activeIdeaId ? "idea" : "home");
   };
@@ -655,6 +708,7 @@ export default function App() {
     }
     try {
       if (idea.id !== UNSAVED_IDEA_ID) await store.deleteIdea(idea.id);
+      track("idea_deleted");
       setIdeas((prev) => prev.filter((i) => i.id !== idea.id));
       if (revisingIdeaId === idea.id) resetDraft();
       goHome();
@@ -681,6 +735,7 @@ export default function App() {
   const handleAddExperiments = async (ideaId: string, titles: string[]) => {
     try {
       const added = await store.addExperiments(ideaId, titles);
+      track("experiments_added", { count: added.length });
       changeExperiments(ideaId, (list) => [...list, ...added]);
     } catch (err) {
       reportPlanError(err);
@@ -696,6 +751,9 @@ export default function App() {
     changeExperiments(ideaId, (list) =>
       list.map((e) => (e.id === experimentId ? { ...e, ...patch } : e))
     );
+    if (patch.status || patch.outcome) {
+      track("experiment_updated", { status: patch.status ?? "", outcome: patch.outcome ?? "" });
+    }
     store.updateExperiment(ideaId, experimentId, patch).catch(reportPlanError);
   };
 
@@ -705,6 +763,17 @@ export default function App() {
     );
     store.deleteExperiment(ideaId, experimentId).catch(reportPlanError);
   };
+
+  // Every signed-in screen gets the feedback dialog; the floating button
+  // stays off screens where it would cover something.
+  const wrap = (node: ReactNode) => (
+    <FeedbackProvider
+      supabase={session ? supabase : null}
+      showButton={screen !== "ask" && screen !== "working" && screen !== "admin"}
+    >
+      {node}
+    </FeedbackProvider>
+  );
 
   if (!authReady) {
     return <p className="px-4 py-16 text-center text-sm text-[#6B6B65]">{t.loading}</p>;
@@ -719,7 +788,7 @@ export default function App() {
   }
 
   if (screen === "profile") {
-    return (
+    return wrap(
       <ProfileScreen
         initial={profile ?? emptyProfile(lang)}
         isOnboarding={!profile}
@@ -735,7 +804,7 @@ export default function App() {
   }
 
   if (screen === "ask" && supabase && askForgeAvailable(supabase)) {
-    return (
+    return wrap(
       <AskForgeScreen
         supabase={supabase}
         ideas={ideas
@@ -748,8 +817,12 @@ export default function App() {
     );
   }
 
+  if (screen === "admin" && supabase && isAdmin) {
+    return wrap(<AdminScreen supabase={supabase} onBack={() => setScreen("home")} />);
+  }
+
   if (screen === "working") {
-    return (
+    return wrap(
       <WorkingScreen
         activePhaseIndex={activePhaseIndex}
         ideaPreview={rawIdea.trim()}
@@ -762,7 +835,7 @@ export default function App() {
   const activeIdea = ideas.find((i) => i.id === activeIdeaId) ?? null;
 
   if (screen === "idea" && activeIdea) {
-    return (
+    return wrap(
       <ReportScreen
         idea={activeIdea}
         activeVersionId={activeVersionId}
@@ -799,7 +872,7 @@ export default function App() {
   const signOut = sb ? () => void sb.auth.signOut() : null;
   const revisingIdea = ideas.find((i) => i.id === revisingIdeaId) ?? null;
 
-  return (
+  return wrap(
     <InputScreen
       rawIdea={rawIdea}
       onChangeIdea={(value) => {
@@ -833,6 +906,7 @@ export default function App() {
       onOpenProfile={() => setScreen("profile")}
       onOpenAsk={supabase && askForgeAvailable(supabase) ? () => openAsk(null) : undefined}
       founderName={profile?.name.trim().split(/\s+/)[0] ?? ""}
+      onOpenAdmin={isAdmin ? () => setScreen("admin") : undefined}
       activeJobs={activeJobs}
       onAnswerJob={handleAnswerJob}
       showProfileNudge={!profileHasSubstance(profile)}

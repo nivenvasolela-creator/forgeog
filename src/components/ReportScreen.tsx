@@ -16,6 +16,8 @@ import { formatReportAsMarkdown } from "../lib/storage";
 import type { ExperimentPatch } from "../lib/store";
 import { DecisionCard } from "./DecisionCard";
 import { SkepticCard } from "./SkepticCard";
+import { RateThis } from "./Feedback";
+import { track } from "../lib/track";
 import { SprintPanel } from "./SprintPanel";
 import { ValidationPlan } from "./ValidationPlan";
 
@@ -91,6 +93,7 @@ export function ReportScreen({
   const verdict = t.verdict(overall);
 
   const handleCopyMarkdown = async () => {
+    track("report_copied");
     const md = formatReportAsMarkdown(report);
     try {
       await navigator.clipboard.writeText(md);
@@ -346,6 +349,14 @@ export function ReportScreen({
         <DecisionCard decision={data.decision} onTestIdea={onTestIdea} />
 
         <SkepticCard skeptic={data.skeptic} />
+
+        <div className="flex justify-end">
+          <RateThis
+            target="report"
+            label={t.feedbackRateReport}
+            context={{ decision: data.decision?.call ?? "", score: data.idea_score.overall }}
+          />
+        </div>
 
         {versionIndex === 0 && (
           <SprintPanel

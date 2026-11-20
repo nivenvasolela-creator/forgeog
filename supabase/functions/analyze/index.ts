@@ -32,6 +32,13 @@ import {
   sendBriefs,
   webhookSecret,
 } from "../_shared/telegram.ts";
+import {
+  feedbackRateLimited,
+  notificationChannels,
+  notifyTeam,
+  parseFeedback,
+  saveFeedback,
+} from "../_shared/feedback.ts";
 
 // Supabase's runtime keeps a request's background work alive with this.
 declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | undefined;
@@ -102,6 +109,7 @@ Deno.serve(async (req: Request) => {
       webSearch: Boolean(search ?? llm.research),
       signInRequired: true,
       telegram: Boolean(TELEGRAM_TOKEN),
+      feedbackNotifications: notificationChannels(env),
     });
   }
 
@@ -204,6 +212,18 @@ Deno.serve(async (req: Request) => {
       console.error("ask forge failed:", err);
       return json({ error: formatApiError(err, llm) }, 502);
     }
+  }
+
+  // Feedback: saved for the admin inbox, and a copy sent to the team.
+  if (action === "feedback") {
+    const input = parseFeedback(record);
+    if (typeof input === "string") return json({ error: input }, 400);
+    if (await feedbackRateLimited(db, user.userId)) {
+      return json({ error: "Thanks! You've sent a lot already; try again in a while." }, 429);
+    }
+    await saveFeedback(db, user.userId, input);
+    await inBackground(notifyTeam(env, input, user.email));
+    return json({ ok: true });
   }
 
   // Connect Telegram: a one-time t.me link that ties the chat to this account.

@@ -1,6 +1,7 @@
 import { ArrowRight, CalendarCheck, FlaskConical, MessageCircle, Sun } from "lucide-react";
 import { sprintTaskKey, sprintTotals, type Idea } from "../lib/analyzeIdea";
 import { useI18n } from "../lib/i18n";
+import { track } from "../lib/track";
 
 interface TodayCardProps {
   ideas: Idea[];
@@ -127,7 +128,10 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
         <div className="mt-5 flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
-            onClick={() => onOpenIdea(focus)}
+            onClick={() => {
+              track("today_open_plan", { hasSprint: Boolean(focus.sprint) });
+              onOpenIdea(focus);
+            }}
             className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-xl bg-[#F97316] px-4 text-sm font-semibold text-white hover:bg-[#EA580C]"
           >
             {focus.sprint ? t.todayOpenPlan : t.todayBuildSprint}
@@ -136,7 +140,10 @@ export function TodayCard({ ideas, founderName, onOpenIdea, onAsk }: TodayCardPr
           {onAsk && (
             <button
               type="button"
-              onClick={onAsk}
+              onClick={() => {
+                track("today_ask");
+                onAsk();
+              }}
               className="inline-flex min-h-[42px] cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#DFDED8] bg-white px-4 text-sm font-medium text-[#18181B] hover:bg-[#FAFAF8]"
             >
               <MessageCircle className="h-4 w-4" />

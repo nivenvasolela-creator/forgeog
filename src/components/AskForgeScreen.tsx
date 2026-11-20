@@ -7,6 +7,7 @@ import {
   FlaskConical,
   Loader2,
   MessageCircle,
+  MessageSquareHeart,
   RotateCcw,
   Trash2,
   UserRound,
@@ -21,6 +22,8 @@ import {
   type ChatMessage,
   type ChatSource,
 } from "../lib/askForge";
+import { track } from "../lib/track";
+import { RateThis, useFeedback } from "./Feedback";
 
 interface AskForgeScreenProps {
   supabase: SupabaseClient;
@@ -138,6 +141,7 @@ export function AskForgeScreen({
     initialIdeaId && ideas.some((i) => i.id === initialIdeaId) ? initialIdeaId : "",
   );
   const listEnd = useRef<HTMLDivElement>(null);
+  const feedback = useFeedback();
   const input = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -190,6 +194,12 @@ export function AskForgeScreen({
       retryOf ? prev.map((m) => (m.id === retryOf ? mine : m)) : [...prev, mine],
     );
     if (!retryOf) setDraft("");
+    track("ask_sent", {
+      suggested: t.askForgeSuggestions.includes(message),
+      focused: Boolean(focusId),
+      retry: Boolean(retryOf),
+      length: message.length,
+    });
     try {
       const answer = await sendChat(supabase, message, focusId || null, lang);
       setMessages((prev) => [
@@ -206,6 +216,7 @@ export function AskForgeScreen({
       ]);
     } catch (err) {
       const reason = err instanceof Error ? err.message : t.unknownError;
+      track("ask_failed", { message: reason });
       setMessages((prev) => prev.map((m) => (m.id === localId ? { ...m, failed: true } : m)));
       setError(t.askForgeFailed(reason));
     } finally {
@@ -249,6 +260,17 @@ export function AskForgeScreen({
               {t.askForge}
             </h1>
           </div>
+          {feedback.available && (
+            <button
+              type="button"
+              onClick={() => feedback.open({ context: { target: "chat" } })}
+              title={t.feedbackButton}
+              aria-label={t.feedbackButton}
+              className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-lg text-[#6B6B65] hover:bg-[#F4F4F1] hover:text-[#18181B]"
+            >
+              <MessageSquareHeart className="h-4 w-4" />
+            </button>
+          )}
           {messages.length > 0 && (
             <button
               type="button"
@@ -388,9 +410,18 @@ export function AskForgeScreen({
                       })}
                     </div>
                   )}
-                  {m.channel === "telegram" && (
-                    <p className="mt-1 text-[11px] text-[#9B9B94]">{t.askForgeViaTelegram}</p>
-                  )}
+                  <div className="mt-1 flex items-center justify-between gap-2">
+                    {m.channel === "telegram" ? (
+                      <p className="text-[11px] text-[#9B9B94]">{t.askForgeViaTelegram}</p>
+                    ) : (
+                      <span />
+                    )}
+                    <RateThis
+                      target="chat"
+                      label={t.feedbackRateAnswer}
+                      context={{ answer: m.content.slice(0, 200), sources: m.sources.length }}
+                    />
+                  </div>
                 </div>
               </li>
             ),

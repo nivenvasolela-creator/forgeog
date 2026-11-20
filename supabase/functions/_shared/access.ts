@@ -1,7 +1,7 @@
 // Who is calling, and how often. Plain fetch so it runs in Node and Deno.
 
 export type UserCheck =
-  | { status: "ok"; userId: string }
+  | { status: "ok"; userId: string; email: string | null }
   | { status: "invalid" }
   | { status: "unreachable" };
 
@@ -23,9 +23,9 @@ export async function verifyUser(
       return { status: "invalid" };
     }
     if (!response.ok) return { status: "unreachable" };
-    const user = (await response.json()) as { id?: unknown };
+    const user = (await response.json()) as { id?: unknown; email?: unknown };
     return typeof user.id === "string"
-      ? { status: "ok", userId: user.id }
+      ? { status: "ok", userId: user.id, email: typeof user.email === "string" ? user.email : null }
       : { status: "invalid" };
   } catch {
     return { status: "unreachable" };
