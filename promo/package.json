@@ -1,0 +1,23 @@
+{
+  "name": "forge-promo",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audio": "node scripts/sfx.mjs",
+    "studio": "remotion studio src/index.ts",
+    "render": "remotion render src/index.ts ForgePromo out/forge-promo.mp4 --codec h264 --crf 16 --browser-executable=/opt/pw-browsers/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell"
+  },
+  "dependencies": {
+    "@fontsource/bricolage-grotesque": "^5.3.0",
+    "@fontsource/dm-sans": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@remotion/cli": "^4.0.300",
+    "@types/react": "^19.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "remotion": "^4.0.300"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}
