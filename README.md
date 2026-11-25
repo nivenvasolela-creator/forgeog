@@ -41,8 +41,11 @@ The hosted setup has two parts, both free and neither goes to sleep:
   the repo under Settings > Pages > Deploy from a branch > `gh-pages`.
 - **API:** the Supabase Edge Function in `supabase/functions/analyze`. It
   runs the same pipeline as `server.ts` (shared code is in
-  `supabase/functions/_shared`). Deploy with
-  `supabase functions deploy analyze`, and set the secrets `LLM_API_KEY`
+  `supabase/functions/_shared`). `.github/workflows/deploy-api.yml`
+  deploys it whenever its code changes on `main`; add a repository secret
+  `SUPABASE_ACCESS_TOKEN` (a personal access token from
+  supabase.com/dashboard/account/tokens) once for that to work. Set the
+  function secrets `LLM_API_KEY`
   (and optionally `TAVILY_API_KEY`) in the Supabase dashboard under
   Edge Functions > Secrets. Without other settings it uses a free NVIDIA
   Nemotron model on OpenRouter.

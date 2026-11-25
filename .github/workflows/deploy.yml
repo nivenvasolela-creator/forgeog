@@ -2,9 +2,10 @@ name: Deploy site
 
 # Builds the FORGE web app and publishes it to GitHub Pages (gh-pages branch).
 # The API runs separately as the Supabase Edge Function in supabase/functions.
+# Only main is deployed, so work-in-progress branches never change the live site.
 on:
   push:
-    branches: [main, claude/brave-turing-m8gy82]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
