@@ -45,6 +45,22 @@ declare const EdgeRuntime: { waitUntil(promise: Promise<unknown>): void } | unde
 
 const env = Deno.env.toObject();
 
+// The free plan stops a worker 150 s after it starts, whatever it is doing,
+// and a worker may serve several requests. Steps are budgeted against that.
+const WORKER_STARTED = Date.now();
+const WORKER_LIMIT_MS = 150_000;
+/** Time kept back for recording the outcome before the worker is stopped. */
+const SAFETY_MS = 12_000;
+/** Longest a single step may run even in a fresh worker. */
+const STEP_MAX_MS = 125_000;
+
+function stepDeadline(): number {
+  return Math.min(
+    Date.now() + STEP_MAX_MS,
+    WORKER_STARTED + WORKER_LIMIT_MS - SAFETY_MS,
+  );
+}
+
 // Gemini first when GEMINI_API_KEY is set, then a free open model on
 // OpenRouter; when one runs out of quota the next one takes over.
 const llm = createLlmChain(env, {
@@ -122,7 +138,7 @@ Deno.serve(async (req: Request) => {
   if (action === "tick") {
     // Callers hang up after a few seconds, so answer at once and do the
     // work in the background (it may run up to the hosted time limit).
-    const work = processNextJob(db, { llm, search })
+    const work = processNextJob(db, { llm, search }, stepDeadline())
       .then((processed) => {
         if (processed) kickNexus();
       })

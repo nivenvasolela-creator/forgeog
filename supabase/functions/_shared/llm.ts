@@ -41,6 +41,13 @@ export interface Llm {
   research: ((system: string, prompt: string) => Promise<ResearchResult>) | null;
 }
 
+/**
+ * Longest a single model request may take. Hosted steps must finish inside
+ * the free plan's 150 s limit, so a stuck provider has to give up early
+ * enough for the next provider to answer.
+ */
+export const MODEL_CALL_TIMEOUT_MS = 60_000;
+
 export class LlmError extends Error {
   status?: number;
   constructor(message: string, status?: number) {
@@ -163,7 +170,7 @@ function createGemini(env: Env): Llm {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(150_000),
+        signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
       }
     );
     const raw = await res.text();
@@ -276,7 +283,7 @@ function createOpenAiCompatible(baseUrl: string, env: Env): Llm {
         seed: 42,
         ...(responseFormat ? { response_format: responseFormat } : {}),
       }),
-      signal: AbortSignal.timeout(150_000),
+      signal: AbortSignal.timeout(MODEL_CALL_TIMEOUT_MS),
     });
 
     const bodyText = await response.text();
@@ -374,6 +381,13 @@ export function isQuotaOrOverload(err: unknown): boolean {
   );
 }
 
+/** True when a request was cut off by its own time limit. */
+export function isTimeout(err: unknown): boolean {
+  if (err instanceof Error && err.name === "TimeoutError") return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /timed out|aborted due to timeout/i.test(message);
+}
+
 /** How long a provider that ran out of quota is skipped before being tried again. */
 const COOL_DOWN_MS = 10 * 60 * 1000;
 
@@ -417,7 +431,8 @@ export function createLlmChain(env: Env, defaults: Env = {}): Llm {
         return await run(provider);
       } catch (err) {
         lastError = err;
-        if (!isQuotaOrOverload(err)) throw err;
+        // A slow provider is treated like an exhausted one: try the next.
+        if (!isQuotaOrOverload(err) && !isTimeout(err)) throw err;
         coolingUntil.set(provider, Date.now() + COOL_DOWN_MS);
       }
     }

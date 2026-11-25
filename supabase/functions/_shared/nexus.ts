@@ -151,6 +151,21 @@ const MAX_QUOTA_WAITS = 6;
 const QUOTA_WAIT_MS = 10 * 60 * 1000;
 const MAX_FAILURES = 3;
 const FAILURE_WAIT_MS = 60 * 1000;
+/** Steps that overran their time budget are retried at once, this many times. */
+const MAX_TIMEOUTS = 4;
+/** A step is not started with less time than this left. */
+const MIN_STEP_MS = 45_000;
+
+class StepTimeout extends Error {
+  constructor() {
+    super("The step ran out of time.");
+  }
+}
+
+/** Stops a step that has overrun before it writes anything. */
+function assertTime(deadline: number): void {
+  if (Date.now() > deadline) throw new StepTimeout();
+}
 
 function deriveTitle(report: ForgeReport, rawIdea: string): string {
   const candidate = report.idea_title || report.idea_summary || rawIdea.trim();
@@ -219,6 +234,7 @@ async function runStep(
   job: JobRow,
   deps: { llm: Llm; search: WebSearch | null },
   db: Db,
+  deadline: number,
 ): Promise<StepOutcome> {
   if (job.kind === "sprint") {
     const parsed = parseSprintInput(job.input);
@@ -230,6 +246,7 @@ async function runStep(
     );
     if (owned.length === 0) throw new Error("That idea no longer exists.");
     const plan = await buildSprint(parsed.input, deps.llm);
+    assertTime(deadline);
     await db.insert(
       "sprints",
       {
@@ -275,6 +292,7 @@ async function runStep(
         deps.llm,
         isQuotaOrOverload,
       );
+      assertTime(deadline);
       const ideaId = await saveReport(db, job, checked);
       return { status: "done", result: { ideaId } };
     }
@@ -285,19 +303,39 @@ async function runStep(
 
 /**
  * Claims one due job and runs its next step. Returns false when there was
- * nothing to do. Never throws for a job's own failure; it is recorded on the job.
+ * nothing to do (or too little time left to start). Never throws for a job's
+ * own failure; it is recorded on the job.
+ *
+ * `deadline` is when the step must be finished (ms since epoch). A step that
+ * overruns is put straight back in the queue rather than being killed by the
+ * host and left looking busy until it is treated as abandoned.
  */
 export async function processNextJob(
   db: Db,
   deps: { llm: Llm; search: WebSearch | null },
+  deadline: number = Date.now() + 120_000,
 ): Promise<boolean> {
+  if (deadline - Date.now() < MIN_STEP_MS) return false;
   const claimed = await db.rpc<JobRow[]>("nexus_claim_job");
   const job = Array.isArray(claimed) ? claimed[0] : undefined;
   if (!job) return false;
 
   const now = () => new Date().toISOString();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    const outcome = await runStep(job, deps, db);
+    const step = runStep(job, deps, db, deadline);
+    // An overrun step keeps going in the background; it must not surface as
+    // an unhandled rejection, and assertTime stops it before any write.
+    step.catch(() => {});
+    const outcome = await Promise.race([
+      step,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new StepTimeout()),
+          Math.max(0, deadline - Date.now()),
+        );
+      }),
+    ]);
     if ("next" in outcome) {
       await db.update("jobs", `id=eq.${job.id}`, {
         status: "queued",
@@ -318,6 +356,20 @@ export async function processNextJob(
       });
     }
   } catch (err) {
+    if (err instanceof StepTimeout) {
+      const attempts = job.attempts + 1;
+      const giveUp = attempts >= MAX_TIMEOUTS;
+      await db.update("jobs", `id=eq.${job.id}`, {
+        status: giveUp ? "failed" : "queued",
+        attempts,
+        error: giveUp
+          ? "The AI providers were too slow to answer. Try again later."
+          : "timeout",
+        run_after: now(),
+        updated_at: now(),
+      });
+      return true;
+    }
     const quota = isQuotaOrOverload(err);
     const attempts = job.attempts + 1;
     const giveUp = quota
@@ -332,6 +384,8 @@ export async function processNextJob(
       ).toISOString(),
       updated_at: now(),
     });
+  } finally {
+    clearTimeout(timer);
   }
   return true;
 }
